@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guía EcoConecta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rokkitt:wght@600;800&display=swap" rel="stylesheet">
+  <!-- Estilos compartidos del equipo (los escribe B). Si aún no existe, no pasa nada. -->
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* Estilos propios de esta pantalla. B puede moverlos a styles.css si quiere unificarlos. */
+    :root {
+      --hoja-profunda: #1e4b2e;
+      --hoja: #2f7a3b;
+      --brote: #a6ce6b;
+      --rocio: #edf3e3;
+      --papel: #fbfdf7;
+      --tierra: #5a3e2b;
+      --sol: #f2b233;
+      --texto: #23301f;
+      --serif: "Rokkitt", "Rockwell", "Roboto Slab", Georgia, serif;
+      --sans: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--rocio); color: var(--texto); font: 1rem/1.55 var(--sans); }
+    :focus-visible { outline: 3px solid var(--sol); outline-offset: 2px; }
+
+    /* ---------- Encabezado con colinas y sol ---------- */
+    .cabecera { position: relative; background: var(--hoja-profunda); color: #fff; padding: 0 16px 120px; overflow: hidden; }
+    .cabecera-interior { position: relative; z-index: 2; max-width: 720px; margin: 0 auto; }
+    .barra { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+    .marca { display: inline-flex; align-items: center; gap: 8px; font: 800 1.35rem var(--serif); color: #fff; text-decoration: none; }
+    .marca svg { width: 26px; height: 26px; }
+    .barra-enlaces { display: flex; gap: 18px; }
+    .barra-enlaces a { color: #e6f0d8; text-decoration: none; font-weight: 600; font-size: .95rem; }
+    .barra-enlaces a:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+    .cabecera h1 { margin: 20px 0 6px; font: 800 clamp(2rem, 7vw, 2.9rem)/1.05 var(--serif); letter-spacing: .01em; }
+    .cabecera p { margin: 0; max-width: 34ch; color: #d6e6c3; font-size: 1.05rem; }
+    .sol { position: absolute; z-index: 1; right: 9%; bottom: 62px; width: 74px; height: 74px; border-radius: 50%; background: var(--sol); }
+    .colinas { position: absolute; z-index: 1; left: 0; bottom: -1px; width: 100%; height: 110px; display: block; }
+
+    /* ---------- Tarjeta del chat, posada sobre las colinas ---------- */
+    .contenedor { position: relative; z-index: 3; max-width: 720px; margin: -62px auto 0; padding: 0 16px 40px; }
+    .chat { background: var(--papel); border: 1px solid #d3e2c0; border-radius: 22px; box-shadow: 0 10px 30px rgba(30, 75, 46, .12); overflow: hidden; }
+
+    .chat-mensajes { height: min(58vh, 520px); min-height: 300px; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; background: #f4f8ec; }
+    .chat-fila { display: flex; align-items: flex-end; gap: 8px; }
+    .chat-fila-usuario { justify-content: flex-end; }
+    .chat-col { display: flex; flex-direction: column; align-items: flex-start; max-width: 82%; }
+    .chat-fila-usuario .chat-col { align-items: flex-end; }
+    .chat-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--brote); display: grid; place-items: center; }
+    .chat-avatar svg { width: 20px; height: 20px; }
+
+    .chat-burbuja { padding: 10px 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.02rem; }
+    .chat-guia { background: #fff; border: 1px solid #d3e2c0; border-radius: 4px 18px 18px 18px; }
+    .chat-usuario { background: var(--hoja); color: #fff; border-radius: 18px 4px 18px 18px; }
+    .chat-respaldo { border: 1.5px dashed var(--sol); background: #fff8e6; }
+    .chat-escribiendo { color: #5d6b55; font-style: italic; }
+
+    .btn-escuchar { background: none; border: 0; padding: 4px 2px 0; font: 600 .9rem var(--sans); color: var(--hoja); cursor: pointer; }
+    .btn-escuchar:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+    .chat-pie { padding: 14px 16px 16px; border-top: 1px solid #e1ebd3; }
+    .sugerencias { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .sugerencias button { background: #fff; color: var(--tierra); border: 1.5px solid rgba(90, 62, 43, .35); border-radius: 999px; padding: 6px 14px; font: 600 .92rem var(--sans); cursor: pointer; }
+    .sugerencias button:hover { background: var(--brote); border-color: var(--brote); color: var(--hoja-profunda); }
+
+    .formulario { display: flex; gap: 8px; }
+    .formulario input { flex: 1; min-width: 0; border: 1.5px solid #b9d19c; border-radius: 999px; padding: 11px 18px; font: 1rem var(--sans); color: var(--texto); background: #fff; }
+    .formulario input::placeholder { color: #7b8a72; }
+    .formulario button { border: 0; border-radius: 999px; padding: 0 22px; background: var(--hoja); color: #fff; font: 700 1rem var(--sans); cursor: pointer; }
+    .formulario button:hover:not(:disabled) { background: var(--hoja-profunda); }
+    .formulario button:disabled, .formulario input:disabled { opacity: .6; cursor: not-allowed; }
+
+    .privacidad { margin: 12px 0 0; font-size: .88rem; color: #55644d; }
+    .nota-voz { margin: 8px 0 0; font-size: .88rem; color: #55644d; }
+
+    @media (max-width: 480px) {
+      .cabecera { padding-bottom: 104px; }
+      .sol { width: 56px; height: 56px; right: 7%; bottom: 58px; }
+      .chat-col { max-width: 88%; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="cabecera">
+    <div class="cabecera-interior">
+      <nav class="barra" aria-label="Principal">
+        <!-- Barra temporal: B la reemplaza por la navbar común del proyecto -->
+        <a class="marca" href="index.html">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 28C4 14 12 5 28 4c0 14-8 22-20 22" fill="#a6ce6b"/><path d="M5 27C11 19 17 14 24 10" stroke="#1e4b2e" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          EcoConecta
+        </a>
+        <div class="barra-enlaces">
+          <a href="educacion.html">Educación</a>
+          <a href="solicitud.html">Solicitar recolección</a>
+        </div>
+      </nav>
+      <h1>Guía de residuos</h1>
+      <p>Pregúntame cómo separar lo orgánico y lo reciclable.</p>
+    </div>
+    <span class="sol" aria-hidden="true"></span>
+    <svg class="colinas" viewBox="0 0 1200 110" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 62 C150 20 300 24 470 58 C650 94 820 30 1000 40 C1100 46 1160 60 1200 70 V110 H0 Z" fill="#4e9a4a"/>
+      <path d="M0 84 C200 52 380 62 560 84 C760 108 960 60 1200 78 V110 H0 Z" fill="#edf3e3"/>
+    </svg>
+  </header>
+
+  <main class="contenedor">
+    <section class="chat" aria-label="Chat con la guía">
+      <div id="mensajes" class="chat-mensajes" role="log" aria-live="polite" aria-label="Conversación con la guía"></div>
+
+      <div class="chat-pie">
+        <div id="sugerencias" class="sugerencias">
+          <button type="button" data-pregunta="¿Qué residuos son orgánicos?">¿Qué es orgánico?</button>
+          <button type="button" data-pregunta="¿Qué residuos se pueden reciclar?">¿Qué se recicla?</button>
+          <button type="button" data-pregunta="¿Cómo solicito una recolección?">¿Cómo solicito una recolección?</button>
+        </div>
+
+        <form id="formulario" class="formulario" autocomplete="off">
+          <label for="pregunta" style="position:absolute;left:-9999px">Escribe tu pregunta</label>
+          <input id="pregunta" type="text" maxlength="500" placeholder="Escribe tu pregunta…" required>
+          <button id="enviar" type="submit">Enviar</button>
+        </form>
+
+        <p class="privacidad">
+          Cuida tu privacidad: no escribas nombres, teléfonos ni direcciones.
+          La guía solo orienta; los coordinadores asignan y programan cada recolección.
+        </p>
+        <p id="nota-voz" class="nota-voz" hidden>
+          Tu dispositivo no tiene una voz en español instalada, así que no se puede leer en voz alta.
+          Las respuestas siempre aparecen escritas.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/asistente.js"></script>
+</body>
+</html>

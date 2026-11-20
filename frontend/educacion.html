@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aprende a separar · EcoConecta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rokkitt:wght@600;800&display=swap" rel="stylesheet">
+  <!-- Estilos compartidos del equipo (los escribe B). Si aún no existe, no pasa nada. -->
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    :root {
+      --hoja-profunda: #1e4b2e;
+      --hoja: #2f7a3b;
+      --brote: #a6ce6b;
+      --rocio: #edf3e3;
+      --papel: #fbfdf7;
+      --tierra: #5a3e2b;
+      --rio: #2d6a8a;
+      --sol: #f2b233;
+      --texto: #23301f;
+      --serif: "Rokkitt", "Rockwell", "Roboto Slab", Georgia, serif;
+      --sans: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--rocio); color: var(--texto); font: 1rem/1.6 var(--sans); }
+    :focus-visible { outline: 3px solid var(--sol); outline-offset: 2px; }
+
+    /* ---------- Encabezado con colinas y sol (igual que la guía) ---------- */
+    .cabecera { position: relative; background: var(--hoja-profunda); color: #fff; padding: 0 16px 120px; overflow: hidden; }
+    .cabecera-interior { position: relative; z-index: 2; max-width: 720px; margin: 0 auto; }
+    .barra { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+    .marca { display: inline-flex; align-items: center; gap: 8px; font: 800 1.35rem var(--serif); color: #fff; text-decoration: none; }
+    .marca svg { width: 26px; height: 26px; }
+    .barra-enlaces { display: flex; gap: 18px; }
+    .barra-enlaces a { color: #e6f0d8; text-decoration: none; font-weight: 600; font-size: .95rem; }
+    .barra-enlaces a:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+    .cabecera h1 { margin: 20px 0 6px; font: 800 clamp(2rem, 7vw, 2.9rem)/1.05 var(--serif); letter-spacing: .01em; }
+    .cabecera p { margin: 0; max-width: 36ch; color: #d6e6c3; font-size: 1.05rem; }
+    .sol { position: absolute; z-index: 1; right: 9%; bottom: 62px; width: 74px; height: 74px; border-radius: 50%; background: var(--sol); }
+    .colinas { position: absolute; z-index: 1; left: 0; bottom: -1px; width: 100%; height: 110px; display: block; }
+
+    /* ---------- Contenido ---------- */
+    .contenedor { position: relative; z-index: 3; max-width: 720px; margin: -40px auto 0; padding: 0 16px 48px; }
+
+    .filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .filtros button { background: #fff; color: var(--tierra); border: 1.5px solid rgba(90, 62, 43, .35); border-radius: 999px; padding: 7px 16px; font: 600 .95rem var(--sans); cursor: pointer; }
+    .filtros button:hover { background: #e3efd2; }
+    .filtros button[aria-pressed="true"] { background: var(--hoja); border-color: var(--hoja); color: #fff; }
+
+    .estado { margin: 24px 0; color: #55644d; }
+    .estado button { margin-left: 8px; border: 0; border-radius: 999px; padding: 6px 16px; background: var(--hoja); color: #fff; font: 700 .95rem var(--sans); cursor: pointer; }
+
+    .tema { --color: var(--hoja); background: var(--papel); border: 1px solid #d3e2c0; border-left: 6px solid var(--color); border-radius: 6px 18px 18px 6px; padding: 18px 20px 20px; margin-bottom: 18px; }
+    .tema.organico { --color: var(--tierra); }
+    .tema.reciclable { --color: var(--rio); }
+    .etiqueta { display: inline-block; background: var(--color); color: #fff; border-radius: 999px; padding: 2px 12px; font: 700 .85rem var(--sans); }
+    .tema h2 { margin: 10px 0 4px; font: 800 1.55rem/1.15 var(--serif); }
+    .tema > p { margin: 0 0 6px; max-width: 62ch; }
+
+    .lista h3 { margin: 14px 0 6px; font: 700 1rem var(--sans); color: var(--color); }
+    .lista ul { list-style: none; margin: 0; padding: 0; }
+    .lista li { position: relative; padding: 3px 0 3px 26px; max-width: 62ch; }
+    .lista li::before { position: absolute; left: 0; top: 3px; width: 20px; text-align: center; font-weight: 800; }
+    .lista.si li::before { content: "✓"; color: var(--hoja); }
+    .lista.no li::before { content: "✕"; color: #b3402a; }
+    .lista.punto li::before { content: "•"; color: var(--color); }
+
+    .pasos { margin: 12px 0 0; padding: 0; list-style: none; counter-reset: paso; }
+    .pasos li { counter-increment: paso; position: relative; padding: 6px 0 6px 40px; max-width: 62ch; }
+    .pasos li::before { content: counter(paso); position: absolute; left: 0; top: 5px; width: 28px; height: 28px; border-radius: 50%; background: var(--color); color: #fff; font: 800 .95rem var(--sans); display: grid; place-items: center; }
+
+    .horarios { margin: 8px 0 24px; }
+    .horarios h2 { margin: 0 0 4px; font: 800 1.55rem/1.15 var(--serif); }
+    .horarios .aviso { margin: 0 0 12px; color: #55644d; max-width: 62ch; }
+    .horario { background: #fff; border: 1px solid #d3e2c0; border-radius: 14px; padding: 12px 16px; margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: baseline; }
+    .horario strong { font: 800 1.15rem var(--serif); min-width: 110px; }
+    .horario span { color: #3a4a34; }
+
+    .cierre { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; }
+    .cierre a { text-decoration: none; border-radius: 999px; padding: 11px 22px; font: 700 1rem var(--sans); }
+    .cierre .principal { background: var(--hoja); color: #fff; }
+    .cierre .principal:hover { background: var(--hoja-profunda); }
+    .cierre .secundario { background: #fff; color: var(--tierra); border: 1.5px solid rgba(90, 62, 43, .35); }
+    .cierre .secundario:hover { background: var(--brote); border-color: var(--brote); color: var(--hoja-profunda); }
+
+    @media (max-width: 480px) {
+      .cabecera { padding-bottom: 104px; }
+      .sol { width: 56px; height: 56px; right: 7%; bottom: 58px; }
+      .tema { padding: 16px 16px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="cabecera">
+    <div class="cabecera-interior">
+      <nav class="barra" aria-label="Principal">
+        <!-- Barra temporal: B la reemplaza por la navbar común del proyecto -->
+        <a class="marca" href="index.html">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 28C4 14 12 5 28 4c0 14-8 22-20 22" fill="#a6ce6b"/><path d="M5 27C11 19 17 14 24 10" stroke="#1e4b2e" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          EcoConecta
+        </a>
+        <div class="barra-enlaces">
+          <a href="asistente.html">Guía</a>
+          <a href="solicitud.html">Solicitar recolección</a>
+        </div>
+      </nav>
+      <h1>Aprende a separar</h1>
+      <p>Qué va en cada recipiente y cómo pedir que lo recojan.</p>
+    </div>
+    <span class="sol" aria-hidden="true"></span>
+    <svg class="colinas" viewBox="0 0 1200 110" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 62 C150 20 300 24 470 58 C650 94 820 30 1000 40 C1100 46 1160 60 1200 70 V110 H0 Z" fill="#4e9a4a"/>
+      <path d="M0 84 C200 52 380 62 560 84 C760 108 960 60 1200 78 V110 H0 Z" fill="#edf3e3"/>
+    </svg>
+  </header>
+
+  <main class="contenedor">
+    <div id="filtros" class="filtros" role="group" aria-label="Filtrar contenidos">
+      <button type="button" data-tipo="todo" aria-pressed="true">Todo</button>
+      <button type="button" data-tipo="organico" aria-pressed="false">Orgánicos</button>
+      <button type="button" data-tipo="reciclable" aria-pressed="false">Reciclables</button>
+      <button type="button" data-tipo="general" aria-pressed="false">Cómo funciona</button>
+    </div>
+
+    <p id="estado" class="estado" role="status">Cargando contenidos…</p>
+    <div id="contenidos"></div>
+    <section id="horarios" class="horarios" hidden aria-labelledby="titulo-horarios"></section>
+
+    <div class="cierre">
+      <a class="principal" href="solicitud.html">Solicitar recolección</a>
+      <a class="secundario" href="asistente.html">Preguntarle a la guía</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const ETIQUETAS = { organico: "Orgánico", reciclable: "Reciclable", general: "Plataforma" };
+      const $filtros = document.getElementById("filtros");
+      const $estado = document.getElementById("estado");
+      const $contenidos = document.getElementById("contenidos");
+      const $horarios = document.getElementById("horarios");
+      let datos = null;
+      let filtro = "todo";
+
+      function el(etiqueta, clase, texto) {
+        const nodo = document.createElement(etiqueta);
+        if (clase) nodo.className = clase;
+        if (texto) nodo.textContent = texto;   // textContent: nunca interpreta HTML
+        return nodo;
+      }
+
+      function pintarTema(c) {
+        const tema = el("article", "tema " + c.tipo);
+        tema.appendChild(el("span", "etiqueta", ETIQUETAS[c.tipo] || "Info"));
+        tema.appendChild(el("h2", "", c.titulo));
+        if (c.texto) tema.appendChild(el("p", "", c.texto));
+
+        if (c.pasos && c.pasos.length) {
+          const ol = el("ol", "pasos");
+          c.pasos.forEach((p) => ol.appendChild(el("li", "", p)));
+          tema.appendChild(ol);
+        }
+        (c.listas || []).forEach((l) => {
+          const bloque = el("div", "lista " + l.marca);
+          bloque.appendChild(el("h3", "", l.titulo));
+          const ul = el("ul");
+          l.items.forEach((i) => ul.appendChild(el("li", "", i)));
+          bloque.appendChild(ul);
+          tema.appendChild(bloque);
+        });
+        return tema;
+      }
+
+      function pintarHorarios() {
+        $horarios.replaceChildren();
+        const titulo = el("h2", "", "Horarios de ejemplo");
+        titulo.id = "titulo-horarios";
+        $horarios.appendChild(titulo);
+        $horarios.appendChild(el("p", "aviso", datos.aviso_horarios));
+        datos.horarios.forEach((h) => {
+          const fila = el("div", "horario");
+          fila.appendChild(el("strong", "", h.colectivo));
+          fila.appendChild(el("span", "", h.recoge));
+          fila.appendChild(el("span", "", h.dias + ", " + h.franja));
+          $horarios.appendChild(fila);
+        });
+        $horarios.hidden = false;
+      }
+
+      function pintar() {
+        $contenidos.replaceChildren();
+        const visibles = datos.contenidos.filter((c) => filtro === "todo" || c.tipo === filtro);
+        visibles.forEach((c) => $contenidos.appendChild(pintarTema(c)));
+        $estado.hidden = visibles.length > 0;
+        if (!visibles.length) $estado.textContent = "No hay contenidos en esta sección todavía.";
+        // Los horarios acompañan a Todo, Orgánicos y Reciclables
+        if (filtro === "general") $horarios.hidden = true; else pintarHorarios();
+      }
+
+      async function cargar() {
+        $estado.hidden = false;
+        $estado.textContent = "Cargando contenidos…";
+        try {
+          const respuesta = await fetch("/api/contenidos");
+          if (!respuesta.ok) throw new Error(respuesta.status);
+          datos = await respuesta.json();
+          pintar();
+        } catch (error) {
+          $estado.textContent = "No se pudieron cargar los contenidos. Revisa tu conexión.";
+          const boton = el("button", "", "Reintentar");
+          boton.type = "button";
+          boton.addEventListener("click", cargar);
+          $estado.appendChild(boton);
+        }
+      }
+
+      $filtros.addEventListener("click", (e) => {
+        const boton = e.target.closest("[data-tipo]");
+        if (!boton || !datos) return;
+        filtro = boton.dataset.tipo;
+        $filtros.querySelectorAll("button").forEach((b) =>
+          b.setAttribute("aria-pressed", String(b === boton)));
+        pintar();
+      });
+
+      cargar();
+    })();
+  </script>
+</body>
+</html>
