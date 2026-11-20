@@ -1,0 +1,82 @@
+/* EcoConecta · estilos base (Bootstrap 5 + variables propias)
+   Paleta tomada del logo: verde hoja, verde vivo, amarillo, naranja mariposa */
+:root {
+  --eco-verde-oscuro: #1b4d2e;
+  --eco-verde: #2e8b4a;
+  --eco-verde-claro: #e6f2e9;
+  --eco-amarillo: #f2b705;
+  --eco-naranja: #e8811a;
+  --eco-fondo: #f5f8f4;
+  --eco-texto: #1b2a21;
+  --eco-texto-suave: #5b6b61;
+  --eco-borde: #d3e0d6;
+  --bs-primary: var(--eco-verde);
+  --bs-body-bg: var(--eco-fondo);
+  --bs-body-color: var(--eco-texto);
+  --bs-body-font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --bs-link-color: var(--eco-verde-oscuro);
+}
+
+body { min-height: 100vh; font-size: 1.02rem; line-height: 1.55; }
+h1, h2, h3 { color: var(--eco-verde-oscuro); font-weight: 700; letter-spacing: -.01em; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+
+/* Navbar */
+.eco-nav { background: var(--eco-verde-oscuro); }
+.eco-nav .navbar-brand { color: #fff; font-weight: 800; }
+.eco-nav .navbar-brand span { color: var(--eco-amarillo); }
+.eco-nav .nav-link { color: #dcebe0; padding: .6rem .9rem; border-radius: .5rem; }
+.eco-nav .nav-link:hover, .eco-nav .nav-link.active { color: #fff; background: rgba(255,255,255,.12); }
+.eco-nav .navbar-toggler { border-color: rgba(255,255,255,.4); }
+.eco-nav .navbar-toggler-icon { filter: invert(1); }
+.eco-nav .usuario { color: #cfe3d4; font-size: .9rem; }
+
+/* Botones: grandes para pantallas táctiles */
+.btn { min-height: 46px; border-radius: .6rem; font-weight: 600; }
+.btn-eco { background: var(--eco-verde); border-color: var(--eco-verde); color: #fff; }
+.btn-eco:hover { background: var(--eco-verde-oscuro); border-color: var(--eco-verde-oscuro); color: #fff; }
+.btn-sol { background: var(--eco-amarillo); border-color: var(--eco-amarillo); color: #2a2200; }
+.btn-sol:hover { background: #d9a304; border-color: #d9a304; color: #2a2200; }
+.form-control, .form-select { min-height: 46px; border-color: var(--eco-borde); }
+.form-control:focus, .form-select:focus, .btn:focus-visible {
+  border-color: var(--eco-verde);
+  box-shadow: 0 0 0 .22rem rgba(46,139,74,.3);
+}
+
+/* Tarjetas */
+.eco-card { background: #fff; border: 1px solid var(--eco-borde); border-radius: .9rem; padding: 1.25rem; }
+.eco-card.destacada { border-left: 6px solid var(--eco-verde); }
+.eco-card .titulo { font-weight: 700; color: var(--eco-verde-oscuro); }
+.texto-suave { color: var(--eco-texto-suave); }
+
+/* Insignias de estado (una por estado, definidas en config.js) */
+.estado { display: inline-block; padding: .25rem .7rem; border-radius: 2rem; font-size: .85rem; font-weight: 600; }
+.estado-recibida    { background: #e3eefb; color: #174a86; }
+.estado-en_revision { background: #fdf1cc; color: #7a5b00; }
+.estado-asignada    { background: #efe3fa; color: #5a2a86; }
+.estado-programada  { background: #d5f0dd; color: #14602f; }
+.estado-recolectada { background: #1b4d2e; color: #fff; }
+.estado-cancelada   { background: #f6dcdc; color: #8a1f1f; }
+
+/* Insignia de flujo */
+.flujo { display: inline-block; padding: .2rem .6rem; border-radius: .4rem; font-size: .82rem; font-weight: 600; }
+.flujo-organico  { background: #e6f2e9; color: #1b4d2e; border: 1px solid #b9d9c1; }
+.flujo-reciclable { background: #fde9d4; color: #8a4a05; border: 1px solid #f0c799; }
+
+/* Línea de tiempo del historial */
+.linea-tiempo { list-style: none; margin: 0; padding-left: 1.2rem; border-left: 3px solid var(--eco-borde); }
+.linea-tiempo li { position: relative; padding: 0 0 .9rem .9rem; }
+.linea-tiempo li::before {
+  content: ""; position: absolute; left: -1.78rem; top: .35rem;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--eco-verde); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--eco-verde);
+}
+
+/* Aviso de puntos de ejemplo (obligatorio mostrarlo) */
+.aviso-puntos { background: #fff8dd; border: 1px solid #ecd47a; border-radius: .6rem; padding: .6rem .9rem; font-size: .9rem; }
+.aviso-mock { background: var(--eco-naranja); color: #fff; text-align: center; font-size: .85rem; padding: .25rem; }
+
+.contenedor { max-width: 1080px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.tabla-scroll { overflow-x: auto; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
