@@ -4,7 +4,10 @@ function usuarioActual() { return Sesion.get()?.usuario || null; }
 
 async function iniciarSesion(email, password) {
   const r = await api.login(email, password);
-  Sesion.set({ token: r.token, usuario: r.usuario });
+  Sesion.set({
+  token: r.access_token || r.token,
+  usuario: r.usuario
+});
   location.href = HOME_POR_ROL[r.usuario.rol] || "index.html";
 }
 

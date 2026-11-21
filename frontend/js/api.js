@@ -33,7 +33,10 @@ async function http(metodo, ruta, cuerpo) {
 }
 
 const apiReal = {
+  
   login: (email, password) => http("POST", "/auth/login", { email, password }),
+  enviarMensajeAsistente: (mensaje, historial = []) =>
+  http("POST", "/asistente/mensaje", { mensaje, historial }),
   crearSolicitud: (d) => http("POST", "/solicitudes", d),
   misSolicitudes: () => http("GET", "/solicitudes/mias"),
   getSolicitud: (id) => http("GET", `/solicitudes/${id}`),

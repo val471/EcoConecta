@@ -1,11 +1,33 @@
 
-from backend.models.usuario import Usuario
-from backend.models.solicitud import Solicitud
-from backend.models.asignacion import Asignacion
-from backend.models.contenido import Contenido
-from backend.models.historial_estado import HistorialEstado
-from backend.models.notificacion import Notificacion
-from backend.models.programacion import Programacion
-from backend.models.puntos import Puntos
-from backend.models.recoleccion import Recoleccion
-from backend.models.regla_puntos import ReglaPuntos
+from fastapi import FastAPI
+
+from backend.routers import auth, asistente
+
+
+app = FastAPI(
+    title="EcoConecta API",
+    description="Backend de la plataforma EcoConecta",
+    version="1.0.0"
+)
+
+
+# Rutas de autenticación
+app.include_router(auth.router)
+
+# Rutas del asistente inteligente
+app.include_router(asistente.router)
+
+
+@app.get("/")
+def inicio():
+    return {
+        "mensaje": "Bienvenido a la API de EcoConecta",
+        "estado": "activo"
+    }
+
+
+@app.get("/health")
+def verificar_estado():
+    return {
+        "estado": "funcionando"
+    }

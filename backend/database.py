@@ -29,3 +29,17 @@ def get_db():
     finally:
         db.close()
 
+def verificar_tablas():
+    from sqlalchemy import text
+
+    with engine.connect() as conexion:
+        base = conexion.execute(
+            text("SELECT current_database()")
+        ).scalar()
+
+        tablas = conexion.execute(
+            text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        ).scalars().all()
+
+        print("Base de datos:", base)
+        print("Tablas encontradas:", tablas)
