@@ -2,7 +2,7 @@
 // Las pantallas NUNCA llaman a fetch: solo a las funciones de `api`.
 // Cuando Persona A termine el backend: USAR_MOCK = false y ajustar RUTAS según el contrato.
 
-const USAR_MOCK = true;
+const USAR_MOCK = false;
 const API_BASE = "/api";
 
 /* ========================= Sesión (compartida con auth.js) ========================= */
