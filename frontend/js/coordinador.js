@@ -113,7 +113,7 @@ $("periodo").addEventListener("change", (e) => { periodo = e.target.value; pinta
 
 $("lista").addEventListener("click", (e) => {
   const b = e.target.closest("[data-accion]"); if (!b) return;
-  actual = todas.find((s) => s.id === b.dataset.id);
+  actual = todas.find((s) => String(s.id) === b.dataset.id);
   if (!actual) return;
   ({ asignar: abrirAsignar, programar: abrirProgramar, cancelar: abrirCancelar })[b.dataset.accion]();
 });
@@ -141,7 +141,7 @@ $("btn-asignar").addEventListener("click", async () => {
     modal("modal-asignar").hide();
     await cargar();
     mostrarAlerta(`Solicitud ${id} asignada. Ahora acuerda el día y la hora.`, "success");
-    actual = todas.find((s) => s.id === id);
+    actual = todas.find((s) => String(s.id) === String(id));
     if (actual?.estado === "asignada") setTimeout(abrirProgramar, 350);   // flujo continuo: asignar → programar
   } catch (e) {
     mostrarAlerta("No se pudo asignar. " + e.message, "danger", "alerta-asignar");

@@ -70,7 +70,7 @@ async function cargar() {
 $("pestanas").addEventListener("click", (e) => { const b = e.target.closest("[data-pestana]"); if (b) { pestana = b.dataset.pestana; pintar(); } });
 $("lista").addEventListener("click", (e) => {
   const b = e.target.closest("[data-accion]"); if (!b) return;
-  actual = todas.find((s) => s.id === b.dataset.id); if (actual) abrirRecoger();
+  actual = todas.find((s) => String(s.id) === b.dataset.id); if (actual) abrirRecoger();
 });
 
 /* ---------- Registrar recolección (RN-05: los puntos salen solo después de esto) ---------- */

@@ -25,7 +25,10 @@ async function http(metodo, ruta, cuerpo) {
   });
   if (res.status === 401) { Sesion.clear(); location.href = "login.html"; throw new Error("Sesión vencida"); }
   const datos = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(datos.detail || datos.mensaje || "No se pudo completar la acción");
+  if (!res.ok) {
+    const d = datos.detail; // FastAPI: texto, o lista de errores de validación (422)
+    throw new Error(typeof d === "string" ? d : Array.isArray(d) ? "Revisa que los datos estén completos y correctos." : datos.mensaje || "No se pudo completar la acción");
+  }
   return datos;
 }
 
