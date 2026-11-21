@@ -1,45 +1,35 @@
+import os
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
-
-from backend.config import settings
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True
-)
+def _url() -> str:
+    url = os.getenv("DATABASE_URL", "")
+    # Render entrega postgres://... y SQLAlchemy con Psycopg 3 necesita postgresql+psycopg://
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
-SessionLocal = sessionmaker(
-    bind=engine,
-    autoflush=False,
-    autocommit=False
-)
+DATABASE_URL = _url()
+engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
+SessionLocal = sessionmaker(bind=engine, autoflush=False) if engine else None
+Base = declarative_base()
 
 
-class Base(DeclarativeBase):
-    pass
+def ahora() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def get_db():
+    if SessionLocal is None:
+        raise RuntimeError("Falta la variable DATABASE_URL")
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-def verificar_tablas():
-    from sqlalchemy import text
-
-    with engine.connect() as conexion:
-        base = conexion.execute(
-            text("SELECT current_database()")
-        ).scalar()
-
-        tablas = conexion.execute(
-            text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-        ).scalars().all()
-
-        print("Base de datos:", base)
-        print("Tablas encontradas:", tablas)

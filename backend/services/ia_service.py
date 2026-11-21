@@ -1,137 +1,113 @@
-"""Asistente con Claude API. SOLO sugiere, clasifica orientativamente y guía.
-
-- La asignación, la confirmación del horario y el cierre los hace siempre una persona.
-- Nunca se envían nombres, teléfonos, correos ni direcciones al modelo: `sanitizar` los enmascara.
-- Sin ANTHROPIC_API_KEY (o si la API falla) responde en modo 'local' con reglas simples.
-"""
+"""Asistente de educación ambiental con Claude API.
+- Solo SUGIERE: no asigna, no programa ni cierra nada (control humano).
+- No envía datos personales al modelo (se limpian teléfonos y correos antes de enviar).
+- Si no hay clave de API o Claude falla, responde con un modo de respaldo por palabras clave (se declara como tal)."""
 import json
-import logging
 import re
+import unicodedata
+import urllib.request
+from typing import List, Optional, Tuple
 
-import httpx
+from ..config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL
 
-from backend.config import settings
-from backend.constantes import AVISO_IA, COLECTIVO_POR_TIPO
+SISTEMA = """Eres el asistente de educación ambiental de EcoConecta, una plataforma comunitaria de Villas de San Pablo (Barranquilla).
+Reglas:
+- Responde en español sencillo, con frases cortas y en máximo 90 palabras. Muchas personas que te escriben son adultos mayores.
+- Solo hablas de separar residuos orgánicos y reciclables, compostaje, la huerta comunitaria y cómo usar la plataforma (solicitar una recolección, ver el estado, los puntos).
+- Los residuos orgánicos los recogen los huerteros y los reciclables los recogen los recicladores. Si no estás seguro de dónde va un residuo, dilo con honestidad y sugiere preguntar al coordinador.
+- No prometas fechas, horas ni asignaciones: eso lo decide y lo confirma un coordinador, que es una persona.
+- Los puntos son valores de ejemplo y no son reglas oficiales de la Fundación Santo Domingo.
+- No pidas ni repitas nombres, teléfonos, direcciones ni otros datos personales.
+- Si la pregunta no tiene que ver con estos temas, di amablemente que solo puedes ayudar con residuos y con la plataforma.
+Al final de tu respuesta, en una línea aparte, escribe exactamente una de estas etiquetas: [[FLUJO:organico]], [[FLUJO:reciclable]] o [[FLUJO:ninguno]], según el tipo de residuo del que habló la persona (ninguno si no aplica o si mencionó los dos tipos)."""
 
-log = logging.getLogger("ecoconecta.ia")
-API_URL = "https://api.anthropic.com/v1/messages"
-
-SISTEMA_ASISTENTE = (
-    "Eres la guía de EcoConecta, una plataforma comunitaria de Villas de San Pablo para separar residuos. "
-    "Responde en español, claro y breve (máximo 5 frases). Orienta sobre cómo separar residuos orgánicos "
-    "(los recogen huerteros) y reciclables (los recogen recicladores) y sobre cómo usar la plataforma: "
-    "solicitar recolección, esperar la revisión del coordinador, la programación y los puntos. "
-    "Solo orientas: no asignas recolectores, no confirmas horarios ni cierras solicitudes; eso lo hace una persona. "
-    "Los puntos son valores de ejemplo, no reglas oficiales. No pidas ni repitas nombres, teléfonos ni direcciones; "
-    "si aparecen, ignóralos. Si no sabes algo, dilo y sugiere hablar con el coordinador."
-)
-
-SISTEMA_CLASIFICADOR = (
-    "Clasifica de forma orientativa el residuo descrito. Responde SOLO un JSON con las claves "
-    '"tipo" ("organico", "reciclable" o "indefinido") y "motivo" (una frase corta en español). '
-    "Orgánico: restos de comida, cáscaras, poda, café, hojas. Reciclable: plástico, cartón, papel, vidrio, metal. "
-    "No incluyas nada más que el JSON."
-)
-
-_PATRONES_PII = [
-    (re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "[correo]"),
-    (re.compile(r"\+?\d[\d\s().-]{6,}\d"), "[número]"),
-    (re.compile(r"\b(calle|carrera|cra|cr|cl|kr|diagonal|diag|transversal|trans|avenida|av|manzana|mz)\b\.?\s*#?\s*\d[\w\s#-]*",
-                re.IGNORECASE), "[dirección]"),
-]
+MAX_TEXTO = 500
 
 
-def sanitizar(texto: str) -> str:
-    """Enmascara correos, números largos y direcciones antes de enviar texto al modelo."""
-    for patron, reemplazo in _PATRONES_PII:
-        texto = patron.sub(reemplazo, texto)
-    return texto
+def _norm(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
 
 
-def _llamar_claude(sistema: str, mensajes: list[dict], max_tokens: int = 400) -> str:
-    resp = httpx.post(
-        API_URL,
-        headers={
-            "x-api-key": settings.ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={"model": settings.ANTHROPIC_MODEL, "max_tokens": max_tokens, "system": sistema, "messages": mensajes},
-        timeout=20,
-    )
-    resp.raise_for_status()
-    bloques = resp.json().get("content", [])
-    return "".join(b.get("text", "") for b in bloques if b.get("type") == "text").strip()
+def limpiar(texto: str) -> str:
+    """Quita correos y números largos (teléfonos) antes de enviar nada a un modelo."""
+    texto = (texto or "")[:MAX_TEXTO]
+    texto = re.sub(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", "[correo omitido]", texto)
+    texto = re.sub(r"\+?\d(?:[\s\-.]?\d){6,}", "[número omitido]", texto)
+    return texto.strip()
 
 
-# ---------------- guía conversacional ----------------
-def responder(mensaje: str, historial: list[dict]) -> dict:
-    mensajes = []
-    for turno in historial[-10:]:
-        rol = "user" if turno["rol"] == "usuario" else "assistant"
-        mensajes.append({"role": rol, "content": sanitizar(turno["texto"])})
-    mensajes.append({"role": "user", "content": sanitizar(mensaje)})
-    # la API exige que el primer mensaje sea del usuario y que los roles alternen
-    while mensajes and mensajes[0]["role"] != "user":
-        mensajes.pop(0)
-    if settings.ANTHROPIC_API_KEY:
+def construir_mensajes(historial: List[dict], mensaje: str) -> List[dict]:
+    """Arma la conversación alternando usuario/asistente y terminando en un mensaje del usuario."""
+    msgs: List[dict] = []
+    for h in (historial or [])[-6:]:
+        rol = {"usuario": "user", "asistente": "assistant"}.get(h.get("rol"))
+        texto = limpiar(h.get("texto", ""))
+        if not rol or not texto:
+            continue
+        if msgs and msgs[-1]["role"] == rol:
+            msgs[-1]["content"] += "\n" + texto
+        else:
+            msgs.append({"role": rol, "content": texto})
+    while msgs and msgs[0]["role"] != "user":
+        msgs.pop(0)
+    nuevo = limpiar(mensaje)
+    if msgs and msgs[-1]["role"] == "user":
+        msgs[-1]["content"] += "\n" + nuevo
+    else:
+        msgs.append({"role": "user", "content": nuevo})
+    return msgs
+
+
+def extraer_flujo(texto: str) -> Tuple[str, Optional[str]]:
+    m = re.search(r"\[\[FLUJO:(organico|reciclable|ninguno)\]\]", texto)
+    flujo = m.group(1) if m else None
+    limpio = re.sub(r"\[\[FLUJO:[a-z]*\]\]", "", texto).strip()
+    return limpio, (flujo if flujo in ("organico", "reciclable") else None)
+
+
+def _llamar_claude(mensajes: List[dict]) -> str:
+    cuerpo = json.dumps({"model": ANTHROPIC_MODEL, "max_tokens": 400, "system": SISTEMA, "messages": mensajes}).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=cuerpo, method="POST",
+        headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        datos = json.loads(r.read())
+    return "".join(b.get("text", "") for b in datos.get("content", []) if b.get("type") == "text")
+
+
+# ---------------- Modo de respaldo (sin IA) ----------------
+ORGANICOS = ["cascara", "fruta", "verdura", "comida", "resto", "cafe", "borra", "huevo", "poda", "hoja", "pasto", "sobras"]
+RECICLABLES = ["botella", "plastico", "carton", "papel", "vidrio", "lata", "metal", "envase", "periodico", "aluminio", "frasco", "revista"]
+NO_APROVECHABLES = ["papel higienico", "panal", "colilla", "servilleta usada", "toalla higienica"]
+
+
+def respaldo(mensaje: str) -> Tuple[str, Optional[str]]:
+    t = _norm(mensaje)
+    if any(p in t for p in NO_APROVECHABLES):
+        return ("Ese residuo no se aprovecha: va con los residuos ordinarios, no con los orgánicos ni los reciclables.", None)
+    org, rec = any(p in t for p in ORGANICOS), any(p in t for p in RECICLABLES)
+    if org and rec:
+        return ("Veo residuos de los dos tipos. Sepáralos: los orgánicos por un lado y los reciclables por otro, "
+                "y haz una solicitud para cada tipo.", None)
+    if org:
+        return ("Eso es un residuo orgánico (restos de comida, cáscaras, café, hojas). Lo recoge un huertero para hacer abono "
+                "en la huerta comunitaria. Puedes pedir la recolección en «Solicitar recolección».", "organico")
+    if rec:
+        return ("Eso es reciclable. Déjalo limpio y seco, separado de los orgánicos. Lo recoge un reciclador de oficio. "
+                "Puedes pedir la recolección en «Solicitar recolección».", "reciclable")
+    return ("No estoy seguro de qué tipo de residuo es. Dime el nombre, por ejemplo «cáscara de naranja» o «botella de plástico», "
+            "o consulta la sección «Aprende». También puedes preguntarle a tu coordinador.", None)
+
+
+def responder(mensaje: str, historial: List[dict]) -> dict:
+    mensaje = limpiar(mensaje)
+    if ANTHROPIC_API_KEY:
         try:
-            return {"respuesta": _llamar_claude(SISTEMA_ASISTENTE, mensajes), "modo": "claude", "aviso": AVISO_IA}
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Claude API falló, se usa modo local: %s", exc)
-    return {"respuesta": _respuesta_local(mensaje), "modo": "local", "aviso": AVISO_IA}
-
-
-def _respuesta_local(mensaje: str) -> str:
-    m = mensaje.lower()
-    if any(p in m for p in ("punto", "premio", "recompensa")):
-        return ("Recibes puntos cuando la recolección queda registrada. Cuántos depende del tipo y la cantidad de "
-                "residuo según una regla de ejemplo que configura el administrador.")
-    if any(p in m for p in ("orgánico", "organico", "cáscara", "cascara", "comida", "fruta", "verdura")):
-        return ("Los residuos orgánicos (cáscaras, restos de comida, poda) los recogen los huerteros. Sepáralos en "
-                "un recipiente aparte, sin plásticos, y haz tu solicitud en la sección 'Solicitar recolección'.")
-    if any(p in m for p in ("plástico", "plastico", "cartón", "carton", "papel", "vidrio", "lata", "botella", "reciclable")):
-        return ("Los reciclables (plástico, cartón, papel, vidrio, metal) los recogen los recicladores. Entrégalos "
-                "limpios y secos, y haz tu solicitud en 'Solicitar recolección'.")
-    return ("Puedo orientarte sobre cómo separar residuos orgánicos y reciclables y cómo usar la plataforma. "
-            "Un coordinador revisa tu solicitud y una persona programa la recolección.")
-
-
-# ---------------- clasificación orientativa ----------------
-_ORGANICO = ("cáscara", "cascara", "fruta", "verdura", "comida", "resto", "poda", "café", "cafe", "huevo",
-             "hoja", "pasto", "orgánico", "organico", "compost", "sobras")
-_RECICLABLE = ("plástico", "plastico", "botella", "cartón", "carton", "papel", "vidrio", "lata", "metal",
-               "aluminio", "tetra", "periódico", "periodico", "reciclable", "chatarra")
-
-
-def _clasificar_local(descripcion: str) -> dict:
-    d = descripcion.lower()
-    o = sum(p in d for p in _ORGANICO)
-    r = sum(p in d for p in _RECICLABLE)
-    if o > r:
-        return {"tipo": "organico", "motivo": "Menciona residuos de origen orgánico.", "modo": "local"}
-    if r > o:
-        return {"tipo": "reciclable", "motivo": "Menciona materiales reciclables.", "modo": "local"}
-    return {"tipo": "indefinido", "motivo": "No es claro si es orgánico o reciclable; elige el tipo manualmente.", "modo": "local"}
-
-
-def clasificar(descripcion: str) -> dict:
-    resultado = None
-    if settings.ANTHROPIC_API_KEY:
-        try:
-            texto = _llamar_claude(SISTEMA_CLASIFICADOR, [{"role": "user", "content": sanitizar(descripcion)}], 150)
-            m = re.search(r"\{.*\}", texto, re.DOTALL)
-            datos = json.loads(m.group(0)) if m else {}
-            if datos.get("tipo") in ("organico", "reciclable", "indefinido"):
-                resultado = {"tipo": datos["tipo"], "motivo": str(datos.get("motivo", ""))[:300], "modo": "claude"}
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Clasificación con Claude falló, se usa modo local: %s", exc)
-    if resultado is None:
-        resultado = _clasificar_local(descripcion)
-    return {
-        "tipo_sugerido": resultado["tipo"],
-        "colectivo_sugerido": COLECTIVO_POR_TIPO.get(resultado["tipo"]),
-        "motivo": resultado["motivo"],
-        "modo": resultado["modo"],
-        "aviso": AVISO_IA,
-    }
+            texto = _llamar_claude(construir_mensajes(historial, mensaje))
+            respuesta, flujo = extraer_flujo(texto)
+            if respuesta:
+                return {"respuesta": respuesta, "flujo_sugerido": flujo, "origen": "claude"}
+        except Exception as e:      # no se imprime el mensaje del usuario, solo el tipo de error
+            print(f"[asistente] Claude no respondió ({type(e).__name__} {getattr(e, 'code', '')}); se usa el modo de respaldo")
+    respuesta, flujo = respaldo(mensaje)
+    return {"respuesta": respuesta, "flujo_sugerido": flujo, "origen": "respaldo"}

@@ -1,82 +1,38 @@
+"""Token firmado con HMAC-SHA256 (usuario + vencimiento). Sin dependencias extra."""
 import base64
 import hashlib
 import hmac
 import json
-import os
 import time
+from typing import Optional
 
-from backend.config import settings
-
-
-# Duración del token: 8 horas
-DURACION_TOKEN = 8 * 60 * 60
+from ..config import JWT_SECRET, TOKEN_HORAS
 
 
-def _clave_secreta():
-    clave = getattr(settings, "SECRET_KEY", "")
-    if not clave:
-        raise RuntimeError("Falta configurar SECRET_KEY en el archivo .env")
-    return clave.encode("utf-8")
+def _b64(datos: bytes) -> str:
+    return base64.urlsafe_b64encode(datos).rstrip(b"=").decode()
 
 
-def crear_token(usuario_id: int, rol: str) -> str:
-    datos = {
-        "sub": usuario_id,
-        "rol": rol,
-        "exp": int(time.time()) + DURACION_TOKEN
-    }
-
-    contenido = base64.urlsafe_b64encode(
-        json.dumps(datos).encode("utf-8")
-    ).rstrip(b"=")
-
-    firma = hmac.new(
-        _clave_secreta(),
-        contenido,
-        hashlib.sha256
-    ).digest()
-
-    firma_codificada = base64.urlsafe_b64encode(firma).rstrip(b"=")
-
-    return (
-        contenido.decode("utf-8")
-        + "."
-        + firma_codificada.decode("utf-8")
-    )
+def _des64(texto: str) -> bytes:
+    return base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
 
 
-def verificar_token(token: str) -> dict | None:
+def _firma(cuerpo: str) -> str:
+    return _b64(hmac.new(JWT_SECRET.encode(), cuerpo.encode(), hashlib.sha256).digest())
+
+
+def crear_token(usuario_id: int, horas: int = TOKEN_HORAS) -> str:
+    cuerpo = _b64(json.dumps({"uid": usuario_id, "exp": int(time.time()) + horas * 3600}).encode())
+    return f"{cuerpo}.{_firma(cuerpo)}"
+
+
+def leer_token(token: str) -> Optional[int]:
+    """Devuelve el id del usuario si el token es válido y no ha vencido."""
     try:
-        contenido, firma_recibida = token.split(".")
-
-        contenido_bytes = contenido.encode("utf-8")
-
-        firma_esperada = hmac.new(
-            _clave_secreta(),
-            contenido_bytes,
-            hashlib.sha256
-        ).digest()
-
-        firma_recibida_bytes = base64.urlsafe_b64decode(
-            firma_recibida + "=" * (-len(firma_recibida) % 4)
-        )
-
-        if not hmac.compare_digest(
-            firma_esperada,
-            firma_recibida_bytes
-        ):
+        cuerpo, firma = token.split(".")
+        if not hmac.compare_digest(firma, _firma(cuerpo)):
             return None
-
-        datos_bytes = base64.urlsafe_b64decode(
-            contenido + "=" * (-len(contenido) % 4)
-        )
-
-        datos = json.loads(datos_bytes)
-
-        if datos.get("exp", 0) < time.time():
-            return None
-
-        return datos
-
+        datos = json.loads(_des64(cuerpo))
+        return int(datos["uid"]) if datos["exp"] > time.time() else None
     except Exception:
         return None

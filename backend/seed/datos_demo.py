@@ -1,74 +1,66 @@
-"""Datos FICTICIOS para la demostración. No cargar información personal real.
-
-Ejecutar manualmente:  python -m backend.seed.datos_demo
-Es idempotente: no duplica lo que ya existe.
-"""
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from backend.models import Contenido, ReglaPuntos, Usuario
-from backend.security import passwords
-
-PASSWORD_DEMO = "Demo2026!"  # solo para la demo; cambiar o desactivar CARGAR_DEMO fuera de ella
+"""Datos de demostración. Solo se cargan si la base está vacía (se ejecuta solo al arrancar).
+Todo es FICTICIO: no cargar información personal real sin autorización."""
+from ..config import DEMO_PASSWORD
+from ..constantes import REGLAS_PUNTOS_EJEMPLO
+from ..models import Contenido, ReglaPuntos, Usuario
+from ..security.passwords import hash_password
 
 USUARIOS = [
-    # nombre, email, rol, colectivo, tipo_solicitante, teléfono ficticio, dirección ficticia
-    ("Administrador Demo", "admin@ecoconecta.demo", "administrador", None, None, None, None),
-    ("Coordinadora Huerteros", "coord.huerteros@ecoconecta.demo", "coordinador_huerteros", "huerteros", None, "3000000011", None),
-    ("Coordinador Recicladores", "coord.recicladores@ecoconecta.demo", "coordinador_recicladores", "recicladores", None, "3000000012", None),
-    ("Huertero Uno", "huertero1@ecoconecta.demo", "recolector", "huerteros", None, "3000000021", None),
-    ("Huertera Dos", "huertero2@ecoconecta.demo", "recolector", "huerteros", None, "3000000022", None),
-    ("Reciclador Uno", "reciclador1@ecoconecta.demo", "recolector", "recicladores", None, "3000000031", None),
-    ("Restaurante La Huerta (demo)", "unidad.productiva@ecoconecta.demo", "solicitante", None, "unidad_productiva",
-     "3000000041", "Calle Ficticia 1 # 2-3, Villas de San Pablo"),
-    ("Hogar Ejemplo (demo)", "hogar@ecoconecta.demo", "solicitante", None, "hogar",
-     "3000000042", "Carrera Ficticia 4 # 5-6, Villas de San Pablo"),
+    # (nombre, email, rol, flujo, tipo, telefono, es_piloto)   El orden fija los ids 1..9
+    ("Ana Pérez (negocio)", "ana@demo.co", "solicitante", None, "unidad_productiva", "3000000001", True),
+    ("Luis Gómez (hogar)", "luis@demo.co", "solicitante", None, "hogar", "3000000002", True),
+    ("Coord. Huerteros", "coordh@demo.co", "coord_huerteros", None, None, None, False),
+    ("Coord. Recicladores", "coordr@demo.co", "coord_recicladores", None, None, None, False),
+    ("Huertero Carlos", "huertero@demo.co", "recolector", "organico", None, None, False),
+    ("Huertera María", "huertera@demo.co", "recolector", "organico", None, None, False),
+    ("Reciclador Jorge", "reciclador@demo.co", "recolector", "reciclable", None, None, False),
+    ("Administrador", "admin@demo.co", "admin", None, None, None, False),
+    ("Vecina sin habilitar", "vecina@demo.co", "solicitante", None, "hogar", "3000000009", False),
 ]
 
-# RN-06: valores de EJEMPLO, no oficiales de FSD
-REGLAS = [
-    ("organico", "kg", 2.0, "Ejemplo: 2 puntos por kg de orgánicos"),
-    ("reciclable", "kg", 1.0, "Ejemplo: 1 punto por kg de reciclables"),
-    ("reciclable", "unidad", 0.5, "Ejemplo: 0,5 puntos por unidad de reciclables"),
-]
-
+# Contenido de EJEMPLO para que la pantalla de educación tenga qué mostrar. Debe ser revisado por el equipo.
 CONTENIDOS = [
-    ("¿Por qué separar los residuos?", "general", "Separar en la fuente reduce lo que llega al relleno y da trabajo a huerteros y recicladores.",
-     "Cuando separas en casa o en tu negocio, los orgánicos se vuelven abono para las huertas y los reciclables vuelven a la industria. Separar es el primer paso."),
-    ("Qué es un residuo orgánico", "organico", "Cáscaras, restos de comida, poda y borra de café.",
-     "Son residuos de origen vegetal o animal que se descomponen. Guárdalos en un recipiente aparte, sin bolsas plásticas ni líquidos de más."),
-    ("Cómo preparar los orgánicos para la recolección", "organico", "Recipiente cerrado, sin plásticos y sin mezclar.",
-     "Usa un balde con tapa. Evita mezclar con vidrio, plástico o aceite. Escurre los líquidos para reducir olores."),
-    ("Qué es un residuo reciclable", "reciclable", "Plástico, cartón, papel, vidrio y metal limpios y secos.",
-     "Enjuaga envases, aplana cajas de cartón y separa por material cuando sea posible. Lo sucio o mojado pierde valor."),
-    ("Cómo preparar los reciclables", "reciclable", "Limpios, secos y aplastados.",
-     "Retira restos de comida, aplasta botellas y latas, y guarda todo en una bolsa o caja aparte de los orgánicos."),
-    ("Cómo funciona EcoConecta", "general", "Solicitas, un coordinador asigna, se programa, se recolecta y ganas puntos.",
-     "1) Haces la solicitud. 2) Llega al colectivo correcto. 3) El coordinador la revisa y asigna a una persona. "
-     "4) Se registra día, hora y encargado. 5) Se recoge y se registra. 6) Recibes puntos (valores de ejemplo)."),
+    ("separacion", "Cómo separar tus residuos en casa",
+     "Tres grupos sencillos: orgánicos, reciclables y el resto.",
+     "Orgánicos: restos de comida, cáscaras, borra de café, hojas y poda.\n"
+     "Reciclables: plástico, cartón, papel, vidrio y metal, limpios y secos.\n"
+     "El resto: lo que no se puede aprovechar, como papel higiénico o servilletas muy sucias.\n"
+     "Si tienes duda con un residuo, pregúntale al asistente."),
+    ("organicos", "Residuos orgánicos y la huerta comunitaria",
+     "Lo que sobra de tu cocina puede volver como abono.",
+     "Los huerteros recogen los residuos orgánicos, los clasifican y los convierten en compost, un abono natural que se usa en la huerta comunitaria.\n"
+     "Entre más limpios lleguen, sin plástico ni vidrio mezclado, mejor abono se produce."),
+    ("reciclables", "Prepara tus reciclables",
+     "Limpios, secos y separados valen más.",
+     "Enjuaga los envases, déjalos secar y aplástalos para que ocupen menos espacio.\n"
+     "No los mezcles con residuos orgánicos. Los recicladores de oficio los recogen y los llevan a aprovechamiento."),
+    ("horarios", "Horarios y rutas de recolección",
+     "El día y la hora los acuerda el coordinador contigo.",
+     "La ruta ideal que se propuso con la comunidad es recolección diaria para negocios y día de por medio para hogares.\n"
+     "Cuando haces una solicitud, un coordinador la revisa y te confirma el día, la hora y la persona que irá. Lo ves en «Mis solicitudes»."),
+    ("plataforma", "Cómo solicitar una recolección",
+     "Cuatro pasos: aprende, solicita, programamos y recogemos.",
+     "1. Elige si tus residuos son orgánicos o reciclables.\n2. Escribe tu dirección y tu celular.\n"
+     "3. Espera a que el coordinador programe el día y la hora.\n4. Entrega tus residuos y recibe tus puntos."),
+    ("puntos", "Cómo ganas puntos",
+     "Los puntos reconocen tu participación.",
+     "Cuando el recolector registra lo que entregaste, ganas puntos según el material y los kilos.\n"
+     "Los valores de los puntos son de ejemplo y los puede ajustar el administrador; no son reglas oficiales de la Fundación Santo Domingo."),
 ]
 
 
-def cargar_demo(db: Session) -> None:
-    for nombre, email, rol, colectivo, tipo, telefono, direccion in USUARIOS:
-        if db.scalar(select(Usuario).where(Usuario.email == email)):
-            continue
-        db.add(Usuario(nombre=nombre, email=email, rol=rol, colectivo=colectivo, tipo_solicitante=tipo,
-                       telefono=telefono, direccion=direccion, password_hash=passwords.hashear(PASSWORD_DEMO),
-                       es_piloto=True))
-    if db.scalar(select(ReglaPuntos).limit(1)) is None:
-        for tipo, unidad, ppu, desc in REGLAS:
-            db.add(ReglaPuntos(tipo_residuo=tipo, unidad=unidad, puntos_por_unidad=ppu, descripcion=desc))
-    if db.scalar(select(Contenido).limit(1)) is None:
-        for titulo, categoria, resumen, cuerpo in CONTENIDOS:
-            db.add(Contenido(titulo=titulo, categoria=categoria, resumen=resumen, cuerpo=cuerpo))
-    db.commit()
-
-
-if __name__ == "__main__":
-    from backend.database import Base, SessionLocal, engine
-
-    Base.metadata.create_all(bind=engine)
-    with SessionLocal() as sesion:
-        cargar_demo(sesion)
-    print("Datos demo cargados.")
+def cargar_datos_demo(db) -> None:
+    if db.query(Usuario).count() == 0:
+        clave = hash_password(DEMO_PASSWORD)          # una sola vez: es más rápido
+        for nombre, email, rol, flujo, tipo, tel, piloto in USUARIOS:
+            db.add(Usuario(nombre=nombre, email=email, password_hash=clave, rol=rol, flujo=flujo,
+                           tipo=tipo, telefono=tel, es_piloto=piloto))
+        db.commit()
+    if db.query(ReglaPuntos).count() == 0:
+        for tipo, unidad, puntos in REGLAS_PUNTOS_EJEMPLO:
+            db.add(ReglaPuntos(tipo_residuo=tipo, unidad=unidad, puntos_por_unidad=puntos))
+        db.commit()
+    if db.query(Contenido).count() == 0:
+        for i, (cat, titulo, resumen, cuerpo) in enumerate(CONTENIDOS):
+            db.add(Contenido(categoria=cat, titulo=titulo, resumen=resumen, cuerpo=cuerpo, orden=i))
+        db.commit()

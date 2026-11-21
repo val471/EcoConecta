@@ -50,7 +50,7 @@ function pintarUsuarios() {
   $("resumen-pilotos").textContent = `${sol.filter((u) => u.es_piloto).length} de ${sol.length} personas habilitadas`;
   $("lista-usuarios").innerHTML = sol.map((u) => `
     <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <div><strong>${esc(u.nombre)}</strong><br><span class="texto-suave">${esc(TIPOS_GENERADOR[u.tipo] || "")}</span></div>
+      <div><strong>${esc(u.nombre)}</strong><br><span class="texto-suave">${esc(TIPOS_GENERADOR[u.tipo] || "")}${u.telefono ? " · celular ••••" + esc(u.telefono.slice(-4)) : ""}</span></div>
       <div class="form-check form-switch fs-5 mb-0">
         <input class="form-check-input" type="checkbox" role="switch" id="piloto-${u.id}" data-piloto="${u.id}" ${u.es_piloto ? "checked" : ""}>
         <label class="form-check-label" for="piloto-${u.id}">${u.es_piloto ? "Habilitado" : "No habilitado"}</label>

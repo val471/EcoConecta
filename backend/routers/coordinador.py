@@ -1,124 +1,100 @@
-from datetime import datetime
+from datetime import date, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.constantes import ROL_RECOLECTOR
-from backend.database import get_db
-from backend.models import Asignacion, Programacion, Solicitud, Usuario
-from backend.schemas.solicitud import (AsignarIn, CancelarIn, ProgramarIn, RecolectorPublico, RevisarIn, SolicitudOut)
-from backend.security.permisos import colectivo_de, requiere_coordinador
-from backend.services import whatsapp_service
-from backend.services.flujo_estados import FlujoError, cambiar_estado
-from backend.services.serializadores import obtener_solicitud, serializar
+from ..constantes import ETIQUETA_ESTADO
+from ..database import ahora, get_db
+from ..models import Asignacion, Programacion, Solicitud, Usuario
+from ..schemas import AsignarIn, CancelarIn, ProgramarIn
+from ..security.permisos import requiere_roles
+from ..services.enrutamiento import flujo_de_coordinador
+from ..services.flujo_estados import cambiar_estado
+from ..services.serializacion import solicitud_dict, usuario_dict
+from ..services.whatsapp_service import notificar
 
-router = APIRouter(prefix="/api/coordinador", tags=["coordinador"])
+router = APIRouter(prefix="/coordinador", tags=["coordinador"])
+solo_coordinador = requiere_roles("coord_huerteros", "coord_recicladores")
 
 
-def _solicitud_del_colectivo(db: Session, usuario: Usuario, solicitud_id: int) -> Solicitud:
-    s = obtener_solicitud(db, solicitud_id)
-    if s.colectivo != colectivo_de(usuario):  # RN-07: un coordinador solo atiende su colectivo
-        raise HTTPException(404, "Solicitud no encontrada.")
+def _solicitud(db: Session, codigo: str, u: Usuario) -> Solicitud:
+    """Un coordinador solo accede a solicitudes de su flujo (RN-01, RN-07)."""
+    s = db.query(Solicitud).filter(Solicitud.codigo == codigo, Solicitud.flujo == flujo_de_coordinador(u)).first()
+    if not s:
+        raise HTTPException(404, "Solicitud no encontrada")
     return s
 
 
-def _recolector_valido(db: Session, s: Solicitud, recolector_id: int) -> Usuario:
-    r = db.get(Usuario, recolector_id)
-    if r is None or r.rol != ROL_RECOLECTOR or not r.activo or r.colectivo != s.colectivo:
-        raise HTTPException(422, f"El recolector debe ser una persona activa del colectivo de {s.colectivo}.")
-    return r
+@router.get("/bandeja")
+def bandeja(estado: Optional[str] = None, db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    q = db.query(Solicitud).filter(Solicitud.flujo == flujo_de_coordinador(u))
+    if estado == "pendientes":
+        q = q.filter(Solicitud.estado.in_(["recibida", "en_revision"]))
+    elif estado:
+        q = q.filter(Solicitud.estado == estado)
+    return [solicitud_dict(s, operativo=True) for s in q.order_by(Solicitud.id.desc()).all()]
 
 
-@router.get("/solicitudes", response_model=list[SolicitudOut])
-def bandeja(estado: str | None = None, usuario: Usuario = Depends(requiere_coordinador), db: Session = Depends(get_db)):
-    consulta = select(Solicitud).where(Solicitud.colectivo == colectivo_de(usuario)).order_by(Solicitud.id.desc())
-    if estado:
-        consulta = consulta.where(Solicitud.estado == estado)
-    return [serializar(s, "operativo") for s in db.scalars(consulta).all()]
+@router.get("/resumen")
+def resumen(db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    flujo = flujo_de_coordinador(u)
+    filas = db.query(Solicitud).filter(Solicitud.flujo == flujo).all()
+    por_estado = {e: 0 for e in ETIQUETA_ESTADO}
+    for s in filas:
+        por_estado[s.estado] += 1
+    return {"flujo": flujo, "total": len(filas), "por_estado": por_estado}
 
 
-@router.get("/solicitudes/{solicitud_id}", response_model=SolicitudOut)
-def detalle(solicitud_id: int, usuario: Usuario = Depends(requiere_coordinador), db: Session = Depends(get_db)):
-    return serializar(_solicitud_del_colectivo(db, usuario, solicitud_id), "operativo")
+@router.get("/recolectores")
+def recolectores(db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    filas = db.query(Usuario).filter(Usuario.rol == "recolector", Usuario.flujo == flujo_de_coordinador(u)).order_by(Usuario.nombre).all()
+    return [usuario_dict(r) for r in filas]
 
 
-@router.get("/recolectores", response_model=list[RecolectorPublico])
-def recolectores(usuario: Usuario = Depends(requiere_coordinador), db: Session = Depends(get_db)):
-    filas = db.scalars(
-        select(Usuario).where(Usuario.rol == ROL_RECOLECTOR, Usuario.activo.is_(True),
-                              Usuario.colectivo == colectivo_de(usuario)).order_by(Usuario.nombre)
-    ).all()
-    return [RecolectorPublico(id=r.id, nombre=r.nombre, colectivo=r.colectivo) for r in filas]
-
-
-@router.post("/solicitudes/{solicitud_id}/revisar", response_model=SolicitudOut)
-def revisar(solicitud_id: int, datos: RevisarIn, usuario: Usuario = Depends(requiere_coordinador),
-            db: Session = Depends(get_db)):
-    s = _solicitud_del_colectivo(db, usuario, solicitud_id)
-    try:
-        cambiar_estado(db, s, "en_revision", usuario, datos.nota or "Solicitud en revisión")
-    except FlujoError as exc:
-        raise HTTPException(409, str(exc)) from exc
+@router.post("/solicitudes/{codigo}/asignar")
+def asignar(codigo: str, datos: AsignarIn, db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    s = _solicitud(db, codigo, u)
+    rec = db.query(Usuario).filter(Usuario.id == datos.recolector_id, Usuario.rol == "recolector", Usuario.flujo == s.flujo).first()
+    if not rec:
+        raise HTTPException(400, "Esa persona no pertenece a tu colectivo")
+    if s.estado == "recibida":
+        cambiar_estado(db, s, "en_revision", u.nombre, "Revisada por el coordinador")
+    cambiar_estado(db, s, "asignada", u.nombre, f"Asignada a {rec.nombre}")        # RN-03
+    if s.asignacion:
+        s.asignacion.recolector_id, s.asignacion.coordinador_id, s.asignacion.fecha = rec.id, u.id, ahora()
+    else:
+        db.add(Asignacion(solicitud_id=s.id, coordinador_id=u.id, recolector_id=rec.id))
     db.commit()
     db.refresh(s)
-    return serializar(s, "operativo")
+    return solicitud_dict(s, operativo=True)
 
 
-@router.post("/solicitudes/{solicitud_id}/asignar", response_model=SolicitudOut)
-def asignar(solicitud_id: int, datos: AsignarIn, usuario: Usuario = Depends(requiere_coordinador),
-            db: Session = Depends(get_db)):
-    s = _solicitud_del_colectivo(db, usuario, solicitud_id)
-    if s.estado != "en_revision":
-        raise HTTPException(409, f"Solo se asigna una solicitud en revisión (estado actual: '{s.estado}').")
-    recolector = _recolector_valido(db, s, datos.recolector_id)
+@router.post("/solicitudes/{codigo}/programar")
+def programar(codigo: str, datos: ProgramarIn, db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    s = _solicitud(db, codigo, u)
+    fecha_txt, hora, persona = (datos.fecha or "").strip(), (datos.hora or "").strip(), (datos.persona or "").strip()
+    if not (fecha_txt and hora and persona):                                          # RN-02
+        raise HTTPException(400, "Falta día, hora o persona encargada")
     try:
-        # RN-03: la atención queda asociada a coordinador y recolector
-        s.asignacion = Asignacion(coordinador_id=usuario.id, recolector_id=recolector.id, nota=datos.nota)
-        db.flush()
-        cambiar_estado(db, s, "asignada", usuario, datos.nota or f"Asignada a {recolector.nombre}")
-    except FlujoError as exc:
-        db.rollback()
-        raise HTTPException(409, str(exc)) from exc
-    whatsapp_service.notificar_asignada(db, s)
+        fecha = date.fromisoformat(fecha_txt)
+    except ValueError:
+        raise HTTPException(400, "El día no es válido")
+    if fecha < date.today() - timedelta(days=1):
+        raise HTTPException(400, "Elige un día de hoy en adelante")
+    cambiar_estado(db, s, "programada", u.nombre, f"Programada: {fecha.strftime('%d/%m/%Y')}, {hora}, a cargo de {persona}")
+    db.add(Programacion(solicitud_id=s.id, fecha=fecha, hora=hora[:20], persona=persona[:120]))
     db.commit()
     db.refresh(s)
-    return serializar(s, "operativo")
+    notificar(db, s, f"Tu recolección {s.codigo} quedó programada para el {fecha.strftime('%d/%m/%Y')} a las {hora}. Irá {persona}.")
+    db.refresh(s)
+    return solicitud_dict(s, operativo=True)
 
 
-@router.post("/solicitudes/{solicitud_id}/programar", response_model=SolicitudOut)
-def programar(solicitud_id: int, datos: ProgramarIn, usuario: Usuario = Depends(requiere_coordinador),
-              db: Session = Depends(get_db)):
-    """RN-02: registra día, hora y persona encargada; solo entonces la solicitud pasa a 'programada'."""
-    s = _solicitud_del_colectivo(db, usuario, solicitud_id)
-    if s.estado != "asignada" or s.asignacion is None:
-        raise HTTPException(409, f"Solo se programa una solicitud asignada (estado actual: '{s.estado}').")
-    encargado_id = datos.encargado_id or s.asignacion.recolector_id
-    if encargado_id != s.asignacion.recolector_id:
-        raise HTTPException(422, "La persona encargada debe ser el recolector asignado; reasigna la solicitud para cambiarla.")
-    try:
-        s.programacion = Programacion(fecha_hora=datos.fecha_hora, encargado_id=encargado_id,
-                                      registrado_por_id=usuario.id, nota=datos.nota)
-        db.flush()
-        cambiar_estado(db, s, "programada", usuario, datos.nota or f"Programada para {datos.fecha_hora:%d/%m/%Y %H:%M}")
-    except FlujoError as exc:
-        db.rollback()
-        raise HTTPException(409, str(exc)) from exc
-    whatsapp_service.notificar_programada(db, s)
+@router.post("/solicitudes/{codigo}/cancelar")
+def cancelar(codigo: str, datos: CancelarIn, db: Session = Depends(get_db), u: Usuario = Depends(solo_coordinador)):
+    s = _solicitud(db, codigo, u)
+    cambiar_estado(db, s, "cancelada", u.nombre, (datos.motivo or "Cancelada").strip() or "Cancelada")
     db.commit()
     db.refresh(s)
-    return serializar(s, "operativo")
-
-
-@router.post("/solicitudes/{solicitud_id}/cancelar", response_model=SolicitudOut)
-def cancelar(solicitud_id: int, datos: CancelarIn, usuario: Usuario = Depends(requiere_coordinador),
-             db: Session = Depends(get_db)):
-    s = _solicitud_del_colectivo(db, usuario, solicitud_id)
-    try:
-        cambiar_estado(db, s, "cancelada", usuario, datos.motivo or "Cancelada por el coordinador")
-    except FlujoError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    whatsapp_service.notificar_cancelada(db, s, datos.motivo)
-    db.commit()
-    db.refresh(s)
-    return serializar(s, "operativo")
+    return solicitud_dict(s, operativo=True)

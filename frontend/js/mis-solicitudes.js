@@ -2,6 +2,7 @@
 requerirRol(["solicitante"]);
 renderNavbar();
 document.getElementById("aviso-puntos").textContent = AVISO_PUNTOS;
+refrescarUsuario().then((u) => { document.getElementById("aviso-piloto").hidden = !(u && u.es_piloto === false); });
 
 function tarjeta(s) {
   const prog = s.programacion

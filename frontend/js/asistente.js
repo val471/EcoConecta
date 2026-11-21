@@ -1,219 +1,79 @@
+// EcoConecta · asistente por texto, con voz LOCAL del dispositivo (speechSynthesis).
+// No usa micrófono ni SpeechRecognition: así no se envía audio a servicios no autorizados.
+// El asistente solo sugiere; asignar, programar y cerrar siguen siendo decisiones de una persona.
+renderNavbar();
 
-// Chat de la guía EcoConecta.
-// El texto siempre se muestra en pantalla.
-// Las respuestas se pueden escuchar con la voz local del navegador.
+const $ = (id) => document.getElementById(id);
+let historial = [];          // [{rol: "usuario" | "asistente", texto}]
+const textosAsistente = [];  // para el botón "Escuchar" de cada respuesta
 
-(() => {
-  const MAX_HISTORIAL = 10;
+/* ---------- Voz (ver js/voz.js: solo voces locales en español) ---------- */
+let marcadoAuto = false;
+Voz.alCambiar((v) => {
+  $("voz-panel").hidden = !v;
+  $("voz-nota").hidden = !!v;
+  document.querySelectorAll("[data-escuchar]").forEach((b) => (b.hidden = !v));
+  if (v && !marcadoAuto) { $("leer-auto").checked = true; marcadoAuto = true; }   // por defecto, lee las respuestas
+});
+const hablar = (texto) => Voz.hablar(texto, () => ($("btn-callar").hidden = false), () => ($("btn-callar").hidden = true));
+$("btn-callar").addEventListener("click", () => { Voz.parar(); $("btn-callar").hidden = true; });
 
-  const $mensajes = document.getElementById("mensajes");
-  const $formulario = document.getElementById("formulario");
-  const $pregunta = document.getElementById("pregunta");
-  const $enviar = document.getElementById("enviar");
-  const $notaVoz = document.getElementById("nota-voz");
+/* ---------- Chat ---------- */
+function burbuja(rol, texto, extra = "") {
+  const div = document.createElement("div");
+  div.className = "burbuja " + rol;
+  div.innerHTML = `<div>${esc(texto)}</div>${extra}`;
+  $("chat").appendChild(div);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return div;
+}
 
-  let historial = [];
-  let vozEs = null;
-  let botonHablando = null;
-
-  // ------------------------------------------------------ voz del navegador
-
-  const PREFERENCIA = ["es-co", "es-mx", "es-us", "es-419", "es-es"];
-
-  function cargarVoz() {
-    if (!("speechSynthesis" in window)) {
-      vozEs = null;
-      actualizarBotonesVoz();
-      return;
-    }
-
-    const locales = speechSynthesis.getVoices().filter(
-      (v) => v.localService && v.lang.toLowerCase().startsWith("es")
-    );
-
-    const orden = (v) => {
-      const i = PREFERENCIA.indexOf(v.lang.toLowerCase().replace("_", "-"));
-      return i === -1 ? 99 : i;
-    };
-
-    locales.sort((a, b) => orden(a) - orden(b));
-    vozEs = locales[0] || null;
-    actualizarBotonesVoz();
+function pieRespuesta(r, indice) {
+  const acciones = [];
+  acciones.push(`<button type="button" class="btn btn-outline-eco btn-sm" data-escuchar="${indice}" ${Voz.disponible ? "" : "hidden"}>
+    <i class="bi bi-volume-up" aria-hidden="true"></i> Escuchar</button>`);
+  if (r.flujo_sugerido) {
+    const nombre = FLUJOS[r.flujo_sugerido].etiqueta.toLowerCase();
+    const destino = usuarioActual() ? `solicitud.html?flujo=${r.flujo_sugerido}` : "login.html";
+    acciones.push(`<a class="btn btn-eco btn-sm" href="${destino}"><i class="bi bi-send" aria-hidden="true"></i>
+      ${usuarioActual() ? `Solicitar recolección de ${nombre}s` : "Ingresar para solicitar"}</a>`);
   }
+  const nota = r.origen === "respaldo" ? `<div class="ayuda w-100">Respuesta básica del asistente automático.</div>` : "";
+  return `<div class="pie">${acciones.join("")}${nota}</div>`;
+}
 
-  function actualizarBotonesVoz() {
-    document.querySelectorAll(".btn-escuchar").forEach((b) => {
-      b.hidden = !vozEs;
-    });
+async function preguntar(texto) {
+  texto = texto.trim();
+  if (!texto) return;
+  burbuja("usuario", texto);
+  $("pregunta").value = "";
+  const pensando = burbuja("asistente", "Pensando…");
+  $("btn-enviar").disabled = true;
+  try {
+    const r = await api.preguntarAsistente(texto, historial.slice(-6));
+    historial.push({ rol: "usuario", texto }, { rol: "asistente", texto: r.respuesta });
+    textosAsistente.push(r.respuesta);
+    pensando.remove();
+    burbuja("asistente", r.respuesta, pieRespuesta(r, textosAsistente.length - 1));
+    if (Voz.disponible && $("leer-auto").checked) hablar(r.respuesta);
+  } catch (e) {
+    pensando.remove();
+    mostrarAlerta("No pude responder ahora. " + e.message, "warning");
+  } finally { $("btn-enviar").disabled = false; $("pregunta").focus(); }
+}
 
-    $notaVoz.hidden = !!vozEs;
-  }
+$("form-chat").addEventListener("submit", (e) => { e.preventDefault(); preguntar($("pregunta").value); });
+$("pregunta").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); preguntar($("pregunta").value); }
+});
+$("chat").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-escuchar]");
+  if (b) hablar(textosAsistente[Number(b.dataset.escuchar)]);
+});
 
-  function hablar(texto, boton) {
-    if (!vozEs) return;
-
-    const eraElMismo = botonHablando === boton;
-
-    speechSynthesis.cancel();
-    restaurarBoton();
-
-    if (eraElMismo) return;
-
-    const dicho = new SpeechSynthesisUtterance(texto);
-    dicho.voice = vozEs;
-    dicho.lang = vozEs.lang;
-    dicho.rate = 0.95;
-    dicho.onend = dicho.onerror = restaurarBoton;
-
-    botonHablando = boton;
-    boton.textContent = "⏹ Detener";
-
-    speechSynthesis.speak(dicho);
-  }
-
-  function restaurarBoton() {
-    if (botonHablando) {
-      botonHablando.textContent = "🔊 Escuchar";
-    }
-
-    botonHablando = null;
-  }
-
-  if ("speechSynthesis" in window) {
-    speechSynthesis.addEventListener("voiceschanged", cargarVoz);
-    cargarVoz();
-  } else {
-    $notaVoz.hidden = false;
-  }
-
-  // ------------------------------------------------------ mensajes del chat
-
-  const HOJA_SVG =
-    '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 28C4 14 12 5 28 4c0 14-8 22-20 22" fill="#1e4b2e"/></svg>';
-
-  function agregarMensaje(rol, texto, { respaldo = false } = {}) {
-    const esUsuario = rol === "user";
-
-    const fila = document.createElement("div");
-    fila.className = "chat-fila " +
-      (esUsuario ? "chat-fila-usuario" : "chat-fila-guia");
-
-    if (!esUsuario) {
-      const avatar = document.createElement("span");
-      avatar.className = "chat-avatar";
-      avatar.innerHTML = HOJA_SVG;
-      fila.appendChild(avatar);
-    }
-
-    const columna = document.createElement("div");
-    columna.className = "chat-col";
-
-    const burbuja = document.createElement("div");
-    burbuja.className = "chat-burbuja " +
-      (esUsuario ? "chat-usuario" : "chat-guia");
-
-    if (respaldo) burbuja.classList.add("chat-respaldo");
-
-    burbuja.textContent = texto;
-    columna.appendChild(burbuja);
-
-    if (!esUsuario) {
-      const boton = document.createElement("button");
-      boton.type = "button";
-      boton.className = "btn-escuchar";
-      boton.textContent = "🔊 Escuchar";
-      boton.hidden = !vozEs;
-      boton.addEventListener("click", () => hablar(texto, boton));
-      columna.appendChild(boton);
-    }
-
-    fila.appendChild(columna);
-    $mensajes.appendChild(fila);
-    $mensajes.scrollTop = $mensajes.scrollHeight;
-
-    return fila;
-  }
-
-  function mostrarEscribiendo() {
-    const fila = agregarMensaje("assistant", "Escribiendo…");
-    fila.querySelector(".btn-escuchar").remove();
-    fila.querySelector(".chat-burbuja").classList.add("chat-escribiendo");
-    return fila;
-  }
-
-  // ------------------------------------------------------ conexión con backend
-
-  async function enviar(texto) {
-    texto = texto.trim();
-
-    if (!texto) return;
-
-    agregarMensaje("user", texto);
-
-    $pregunta.value = "";
-    $pregunta.disabled = true;
-    $enviar.disabled = true;
-
-    const escribiendo = mostrarEscribiendo();
-
-    try {
-      // Convierte el historial al formato que espera FastAPI.
-      const historialBackend = historial.slice(-MAX_HISTORIAL).map((turno) => ({
-        rol: turno.role === "user" ? "usuario" : "asistente",
-        texto: turno.content
-      }));
-
-      // Utiliza api.js para enviar el mensaje con autenticación.
-      const datos = await api.enviarMensajeAsistente(
-        texto,
-        historialBackend
-      );
-
-      escribiendo.remove();
-
-      agregarMensaje("assistant", datos.respuesta);
-
-      // Guarda la conversación para las siguientes preguntas.
-      historial.push({ role: "user", content: texto });
-      historial.push({ role: "assistant", content: datos.respuesta });
-
-    } catch (error) {
-      escribiendo.remove();
-
-      agregarMensaje(
-        "assistant",
-        error.message || "No pude conectarme con el servidor. Inténtalo de nuevo."
-      );
-
-      console.error("Error en el asistente:", error);
-
-    } finally {
-      $pregunta.disabled = false;
-      $enviar.disabled = false;
-      $pregunta.focus();
-    }
-  }
-
-  // ------------------------------------------------------ eventos
-
-  $formulario.addEventListener("submit", (e) => {
-    e.preventDefault();
-    enviar($pregunta.value);
-  });
-
-  document.getElementById("sugerencias").addEventListener("click", (e) => {
-    const boton = e.target.closest("[data-pregunta]");
-
-    if (boton) {
-      enviar(boton.dataset.pregunta);
-    }
-  });
-
-  // ------------------------------------------------------ bienvenida
-
-  agregarMensaje(
-    "assistant",
-    "¡Hola! Soy la guía de EcoConecta. Te ayudo a separar residuos orgánicos y reciclables y a usar la plataforma. ¿Qué quieres saber?"
-  );
-
-})();
+/* ---------- Preguntas de ejemplo ---------- */
+const EJEMPLOS = ["¿Dónde va una cáscara de naranja?", "¿Puedo reciclar una botella de plástico?", "¿Cómo pido una recolección?"];
+$("sugerencias").innerHTML = EJEMPLOS.map((q, i) => `<button type="button" class="chip me-2 mb-2" data-q="${i}">${esc(q)}</button>`).join("");
+$("sugerencias").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-q]"); if (b) preguntar(EJEMPLOS[Number(b.dataset.q)]);
+});

@@ -1,20 +1,36 @@
-from fastapi import APIRouter, Depends
+import time
+from collections import defaultdict, deque
 
-from backend.models import Usuario
-from backend.schemas.asistente import ClasificacionOut, ClasificarIn, MensajeIn, RespuestaIA
-from backend.security.permisos import usuario_actual
-from backend.services import ia_service
+from fastapi import APIRouter, HTTPException, Request
 
-router = APIRouter(prefix="/api/asistente", tags=["asistente"])
+from ..schemas import AsistenteIn
+from ..services.ia_service import responder
 
+router = APIRouter(prefix="/asistente", tags=["asistente"])
 
-@router.post("/mensaje", response_model=RespuestaIA)
-def mensaje(datos: MensajeIn, _: Usuario = Depends(usuario_actual)):
-    """Guía conversacional (texto). La voz la produce el navegador con speechSynthesis; no se envía audio a terceros."""
-    return ia_service.responder(datos.mensaje, [t.model_dump() for t in datos.historial])
+# Límite sencillo por IP: el asistente es público y cada pregunta puede costar
+_visitas = defaultdict(deque)
+LIMITE, VENTANA = 15, 60
 
 
-@router.post("/clasificar", response_model=ClasificacionOut)
-def clasificar(datos: ClasificarIn, _: Usuario = Depends(usuario_actual)):
-    """Sugerencia orientativa de tipo de residuo. El usuario siempre confirma el tipo."""
-    return ia_service.clasificar(datos.descripcion)
+def _permitido(ip: str) -> bool:
+    ahora, cola = time.time(), _visitas[ip]
+    while cola and ahora - cola[0] > VENTANA:
+        cola.popleft()
+    if len(cola) >= LIMITE:
+        return False
+    cola.append(ahora)
+    return True
+
+
+@router.post("")
+def preguntar(datos: AsistenteIn, request: Request):
+    """Orienta sobre residuos. Solo sugiere: nunca crea, asigna ni programa solicitudes."""
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+    if not _permitido(ip):
+        raise HTTPException(429, "Hiciste muchas preguntas seguidas. Espera un minuto e inténtalo de nuevo.")
+    mensaje = datos.mensaje.strip()
+    if not mensaje:
+        raise HTTPException(400, "Escribe tu pregunta")
+    historial = [{"rol": h.rol, "texto": h.texto} for h in datos.historial]
+    return responder(mensaje, historial)

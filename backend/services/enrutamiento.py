@@ -1,13 +1,7 @@
-"""RN-01: cada solicitud es orgánica o reciclable y llega al colectivo correcto."""
-from backend.constantes import COLECTIVO_POR_TIPO
+"""RN-01: cada solicitud llega al colectivo correcto según su flujo."""
+COORDINADOR_POR_FLUJO = {"organico": "coord_huerteros", "reciclable": "coord_recicladores"}
+FLUJO_POR_COORDINADOR = {rol: flujo for flujo, rol in COORDINADOR_POR_FLUJO.items()}
 
 
-class EnrutamientoError(ValueError):
-    pass
-
-
-def colectivo_para(tipo_residuo: str) -> str:
-    try:
-        return COLECTIVO_POR_TIPO[tipo_residuo]
-    except KeyError:
-        raise EnrutamientoError(f"Tipo de residuo no válido: {tipo_residuo!r}") from None
+def flujo_de_coordinador(usuario) -> str:
+    return FLUJO_POR_COORDINADOR[usuario.rol]

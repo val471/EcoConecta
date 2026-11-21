@@ -1,27 +1,41 @@
-# Roles de los usuarios
-ROL_SOLICITANTE = "solicitante"
-ROL_COORD_HUERTEROS = "coordinador_huerteros"
-ROL_COORD_RECICLADORES = "coordinador_recicladores"
-ROL_RECOLECTOR = "recolector"
-ROL_ADMIN = "admin"
+"""Valores fijos compartidos con el frontend (mismos nombres que js/config.js)."""
 
-# Roles de coordinadores
-ROLES_COORDINADOR = (
-    ROL_COORD_HUERTEROS,
-    ROL_COORD_RECICLADORES
-)
+ROLES = ("solicitante", "coord_huerteros", "coord_recicladores", "recolector", "admin")
+FLUJOS = ("organico", "reciclable")
+TIPOS_GENERADOR = ("hogar", "unidad_productiva")
 
-# Colectivo correspondiente a cada coordinador
-COLECTIVO_POR_ROL_COORD = {
-    ROL_COORD_HUERTEROS: "huerteros",
-    ROL_COORD_RECICLADORES: "recicladores"
+ETIQUETA_ESTADO = {
+    "recibida": "Recibida",
+    "en_revision": "En revisión",
+    "asignada": "Asignada",
+    "programada": "Programada",
+    "recolectada": "Recolectada",
+    "cancelada": "Cancelada",
 }
 
-# Colectivo correspondiente a cada tipo de residuo
-COLECTIVO_POR_TIPO = {
-    "organico": "huerteros",
-    "reciclable": "recicladores"
+# Transiciones permitidas (RN-02, RN-05)
+TRANSICIONES = {
+    "recibida": ["en_revision", "asignada", "cancelada"],
+    "en_revision": ["asignada", "cancelada"],
+    "asignada": ["programada", "cancelada"],
+    "programada": ["recolectada", "cancelada"],
+    "recolectada": [],
+    "cancelada": [],
 }
 
-# Aviso sobre las respuestas de inteligencia artificial
-AVISO_IA = "La información del asistente es orientativa y puede requerir confirmación de un coordinador."
+TIPOS_RESIDUO = {
+    "organico": {"etiqueta": "Orgánico", "flujo": "organico"},
+    "plastico": {"etiqueta": "Plástico", "flujo": "reciclable"},
+    "carton_papel": {"etiqueta": "Cartón y papel", "flujo": "reciclable"},
+    "vidrio": {"etiqueta": "Vidrio", "flujo": "reciclable"},
+    "metal": {"etiqueta": "Metal", "flujo": "reciclable"},
+}
+
+# Valores de EJEMPLO. No son reglas oficiales de la Fundación Santo Domingo (RN-06).
+REGLAS_PUNTOS_EJEMPLO = [
+    ("organico", "kg", 5),
+    ("plastico", "kg", 8),
+    ("carton_papel", "kg", 4),
+    ("vidrio", "kg", 3),
+    ("metal", "kg", 10),
+]

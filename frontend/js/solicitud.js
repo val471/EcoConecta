@@ -8,9 +8,18 @@ const $ = (id) => document.getElementById(id);
 $("tipo_generador").innerHTML = Object.entries(TIPOS_GENERADOR)
   .map(([v, t]) => `<option value="${v}" ${usuario?.tipo === v ? "selected" : ""}>${t}</option>`).join("");
 if (usuario?.telefono) $("contacto").value = usuario.telefono;
+refrescarUsuario().then((u) => {
+  if (u && u.es_piloto === false) {
+    mostrarAlerta("Tu cuenta todavía no está habilitada para solicitar recolecciones. El administrador del piloto debe habilitarla.", "warning");
+    $("btn-enviar").disabled = true;
+  }
+});
 
 // Solo números en el celular
 $("contacto").addEventListener("input", (e) => { e.target.value = e.target.value.replace(/\D/g, ""); });
+
+const flujoSugerido = new URLSearchParams(location.search).get("flujo");
+if (["organico", "reciclable"].includes(flujoSugerido)) $("flujo-" + flujoSugerido).checked = true;
 
 function error(id, mensaje) {
   const el = $("error-" + id);
@@ -53,7 +62,7 @@ $("form-solicitud").addEventListener("submit", async (e) => {
     $("vista-form").hidden = true; $("vista-ok").hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (err) {
-    mostrarAlerta("No pudimos enviar tu solicitud. " + err.message + " Inténtalo de nuevo.", "danger");
+    mostrarAlerta(err.message.includes("habilitada") ? err.message : "No pudimos enviar tu solicitud. " + err.message + " Inténtalo de nuevo.", err.message.includes("habilitada") ? "warning" : "danger");
   } finally {
     btn.disabled = false; btn.innerHTML = '<i class="bi bi-send" aria-hidden="true"></i> Enviar solicitud';
   }

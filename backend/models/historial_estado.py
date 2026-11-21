@@ -1,24 +1,15 @@
-from datetime import datetime
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from backend.database import Base
-from backend.tiempo import ahora
+from ..database import Base, ahora
 
 
 class HistorialEstado(Base):
-    """RN-04: cada cambio de estado deja una fila."""
-
+    """Una fila por cada cambio de estado (RN-04)."""
     __tablename__ = "historial_estado"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    solicitud_id: Mapped[int] = mapped_column(ForeignKey("solicitudes.id"), index=True)
-    estado_anterior: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    estado_nuevo: Mapped[str] = mapped_column(String(20))
-    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
-    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
-    fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
-
-    solicitud = relationship("Solicitud", back_populates="historial")
-    usuario = relationship("Usuario", foreign_keys=[usuario_id])
+    id = Column(Integer, primary_key=True)
+    solicitud_id = Column(Integer, ForeignKey("solicitudes.id"), nullable=False, index=True)
+    estado = Column(String(20), nullable=False)
+    por = Column(String(120))
+    nota = Column(String(300), default="")
+    fecha = Column(DateTime(timezone=True), default=ahora)

@@ -1,21 +1,14 @@
-from datetime import datetime
+from sqlalchemy import Column, Integer, Numeric, String, UniqueConstraint
 
-from sqlalchemy import Boolean, DateTime, Float, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
-
-from backend.database import Base
-from backend.tiempo import ahora
+from ..database import Base
 
 
 class ReglaPuntos(Base):
-    """RN-06: regla parametrizable por el administrador. Los valores son de ejemplo, no oficiales."""
-
+    """Regla parametrizable por el administrador (RN-06). Valores de ejemplo, no oficiales de FSD."""
     __tablename__ = "reglas_puntos"
+    __table_args__ = (UniqueConstraint("tipo_residuo", "unidad", name="uq_regla_tipo_unidad"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tipo_residuo: Mapped[str] = mapped_column(String(20), index=True)
-    unidad: Mapped[str] = mapped_column(String(20))
-    puntos_por_unidad: Mapped[float] = mapped_column(Float)
-    descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
-    activa: Mapped[bool] = mapped_column(Boolean, default=True)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+    id = Column(Integer, primary_key=True)
+    tipo_residuo = Column(String(30), nullable=False)
+    unidad = Column(String(10), nullable=False, default="kg")
+    puntos_por_unidad = Column(Numeric(10, 2), nullable=False)

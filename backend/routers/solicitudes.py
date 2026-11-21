@@ -1,92 +1,73 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import settings
-from backend.constantes import AVISO_PUNTOS
-from backend.database import get_db
-from backend.models import HistorialEstado, Puntos, Solicitud, Usuario
-from backend.schemas.solicitud import CancelarIn, SolicitudCrear, SolicitudOut
-from backend.security.permisos import modo_para, requiere_solicitante, usuario_actual
-from backend.services import puntos as svc_puntos
-from backend.services import whatsapp_service
-from backend.services.enrutamiento import EnrutamientoError, colectivo_para
-from backend.services.flujo_estados import FlujoError, cambiar_estado
-from backend.services.serializadores import obtener_solicitud, serializar
+from ..constantes import FLUJOS, TIPOS_GENERADOR
+from ..database import get_db
+from ..models import HistorialEstado, MovimientoPuntos, Solicitud, Usuario
+from ..schemas import SolicitudIn
+from ..security.permisos import requiere_roles
+from ..services.serializacion import iso, solicitud_dict
+from ..services.whatsapp_service import notificar
 
-router = APIRouter(prefix="/api/solicitudes", tags=["solicitudes"])
+router = APIRouter(prefix="/solicitudes", tags=["solicitudes"])
+solo_solicitante = requiere_roles("solicitante")
 
 
-@router.post("", response_model=SolicitudOut, status_code=201)
-def crear(datos: SolicitudCrear, usuario: Usuario = Depends(requiere_solicitante), db: Session = Depends(get_db)):
-    if settings.SOLO_USUARIOS_PILOTO and not usuario.es_piloto:
-        raise HTTPException(403, "Tu cuenta aún no está habilitada para el piloto.")  # RN-08
-    direccion = (datos.direccion or usuario.direccion or "").strip()
-    if not direccion:
-        raise HTTPException(422, "Indica la dirección de recolección.")
-    try:
-        colectivo = colectivo_para(datos.tipo_residuo)  # RN-01
-    except EnrutamientoError as exc:
-        raise HTTPException(422, str(exc)) from exc
+@router.post("")
+def crear(datos: SolicitudIn, db: Session = Depends(get_db), u: Usuario = Depends(solo_solicitante)):
+    # RN-08: solo usuarios piloto habilitados
+    if not u.es_piloto:
+        raise HTTPException(403, "Tu cuenta todavía no está habilitada para solicitar recolecciones. Habla con el administrador.")
+    if datos.flujo not in FLUJOS:
+        raise HTTPException(400, "Elige si tus residuos son orgánicos o reciclables")
+    if datos.tipo_generador not in TIPOS_GENERADOR:
+        raise HTTPException(400, "Elige el tipo de lugar")
+    direccion = datos.direccion.strip()
+    if len(direccion) < 5:
+        raise HTTPException(400, "Escribe tu dirección completa")
+    contacto = datos.contacto.strip()
+    if not re.fullmatch(r"3\d{9}", contacto):
+        raise HTTPException(400, "Escribe un celular de 10 números, empezando por 3")
+
     s = Solicitud(
-        solicitante_id=usuario.id, tipo_residuo=datos.tipo_residuo, colectivo=colectivo,
-        descripcion=datos.descripcion.strip(), cantidad_estimada=datos.cantidad_estimada,
-        unidad_estimada=datos.unidad_estimada, direccion=direccion, estado="recibida",
+        usuario_id=u.id, flujo=datos.flujo,                 # RN-01: el flujo define el coordinador
+        tipo_generador=datos.tipo_generador, direccion=direccion[:200], contacto=contacto,
+        observaciones=(datos.observaciones or "").strip()[:300],
+        preferencia_horaria=(datos.preferencia_horaria or "").strip()[:60], estado="recibida",
     )
     db.add(s)
     db.flush()
-    s.codigo = f"SOL-{s.id:05d}"  # RN-04
-    db.add(HistorialEstado(solicitud_id=s.id, estado_anterior=None, estado_nuevo="recibida",
-                           usuario_id=usuario.id, nota="Solicitud creada"))
-    db.flush()
-    whatsapp_service.notificar_recibida(db, s)
+    s.codigo = f"SOL-{s.id:04d}"
+    db.add(HistorialEstado(solicitud_id=s.id, estado="recibida", por=u.nombre, nota="Solicitud registrada"))  # RN-04
     db.commit()
     db.refresh(s)
-    return serializar(s, "propio")
+    notificar(db, s, f"Recibimos tu solicitud {s.codigo}. Un coordinador la revisará y te dirá el día, la hora y la persona que irá.")
+    db.refresh(s)
+    return solicitud_dict(s)
 
 
-@router.get("", response_model=list[SolicitudOut])
-def mis_solicitudes(usuario: Usuario = Depends(requiere_solicitante), db: Session = Depends(get_db)):
-    filas = db.scalars(select(Solicitud).where(Solicitud.solicitante_id == usuario.id).order_by(Solicitud.id.desc())).all()
-    return [serializar(s, "propio") for s in filas]
+# OJO: /mias y /puntos van ANTES de /{codigo}, o FastAPI los confunde con un código
+@router.get("/mias")
+def mias(db: Session = Depends(get_db), u: Usuario = Depends(solo_solicitante)):
+    filas = db.query(Solicitud).filter(Solicitud.usuario_id == u.id).order_by(Solicitud.id.desc()).all()
+    return [solicitud_dict(s) for s in filas]
 
 
 @router.get("/puntos")
-def mis_puntos(usuario: Usuario = Depends(requiere_solicitante), db: Session = Depends(get_db)):
-    movimientos = db.scalars(select(Puntos).where(Puntos.usuario_id == usuario.id).order_by(Puntos.id.desc())).all()
+def puntos(db: Session = Depends(get_db), u: Usuario = Depends(solo_solicitante)):
+    movs = db.query(MovimientoPuntos).filter(MovimientoPuntos.usuario_id == u.id).order_by(MovimientoPuntos.id.desc()).all()
     return {
-        "total": svc_puntos.total_usuario(db, usuario.id),
-        "movimientos": [
-            {"solicitud_id": m.solicitud_id, "codigo": f"SOL-{m.solicitud_id:05d}", "puntos": m.puntos,
-             "explicacion": m.explicacion, "fecha": m.creado_en}
-            for m in movimientos
-        ],
-        "aviso": AVISO_PUNTOS,
+        "total": sum(m.puntos for m in movs),
+        "movimientos": [{"solicitud_id": m.solicitud_id, "puntos": m.puntos, "explicacion": m.explicacion,
+                         "fecha": iso(m.fecha)} for m in movs],
     }
 
 
-@router.get("/{solicitud_id}", response_model=SolicitudOut)
-def detalle(solicitud_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
-    s = obtener_solicitud(db, solicitud_id)
-    modo = modo_para(usuario, s)
-    if modo is None:  # RN-07: no revelar ni que existe
-        raise HTTPException(404, "Solicitud no encontrada.")
-    return serializar(s, modo)
-
-
-@router.post("/{solicitud_id}/cancelar", response_model=SolicitudOut)
-def cancelar(solicitud_id: int, datos: CancelarIn, usuario: Usuario = Depends(requiere_solicitante),
-             db: Session = Depends(get_db)):
-    s = obtener_solicitud(db, solicitud_id)
-    if s.solicitante_id != usuario.id:
-        raise HTTPException(404, "Solicitud no encontrada.")
-    if s.estado not in ("recibida", "en_revision"):
-        raise HTTPException(409, "La solicitud ya está en gestión; comunícate con el coordinador para cancelarla.")
-    try:
-        cambiar_estado(db, s, "cancelada", usuario, datos.motivo or "Cancelada por el solicitante")
-    except FlujoError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    whatsapp_service.notificar_cancelada(db, s, datos.motivo)
-    db.commit()
-    db.refresh(s)
-    return serializar(s, "propio")
+@router.get("/{codigo}")
+def detalle(codigo: str, db: Session = Depends(get_db), u: Usuario = Depends(solo_solicitante)):
+    s = db.query(Solicitud).filter(Solicitud.codigo == codigo, Solicitud.usuario_id == u.id).first()
+    if not s:
+        raise HTTPException(404, "Solicitud no encontrada")      # RN-07: no se revela que existe
+    return solicitud_dict(s)

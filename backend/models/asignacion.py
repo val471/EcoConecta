@@ -1,24 +1,18 @@
-from datetime import datetime
+from sqlalchemy import Column, DateTime, ForeignKey, Integer
+from sqlalchemy.orm import relationship
 
-from sqlalchemy import DateTime, ForeignKey, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from backend.database import Base
-from backend.tiempo import ahora
+from ..database import Base, ahora
 
 
 class Asignacion(Base):
-    """RN-03: la atención queda asociada a un coordinador y a un recolector."""
-
+    """Asocia la solicitud con su coordinador y su recolector (RN-03)."""
     __tablename__ = "asignaciones"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    solicitud_id: Mapped[int] = mapped_column(ForeignKey("solicitudes.id"), unique=True)
-    coordinador_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
-    recolector_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
-    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=ahora)
+    id = Column(Integer, primary_key=True)
+    solicitud_id = Column(Integer, ForeignKey("solicitudes.id"), unique=True, nullable=False)
+    coordinador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    recolector_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    fecha = Column(DateTime(timezone=True), default=ahora)
 
-    solicitud = relationship("Solicitud", back_populates="asignacion")
     coordinador = relationship("Usuario", foreign_keys=[coordinador_id])
     recolector = relationship("Usuario", foreign_keys=[recolector_id])

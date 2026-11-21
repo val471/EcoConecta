@@ -23,7 +23,7 @@ async function http(metodo, ruta, cuerpo) {
     },
     body: cuerpo ? JSON.stringify(cuerpo) : undefined,
   });
-  if (res.status === 401) { Sesion.clear(); location.href = "login.html"; throw new Error("Sesión vencida"); }
+  if (res.status === 401 && ruta !== "/auth/login") { Sesion.clear(); location.href = "login.html"; throw new Error("Sesión vencida"); }
   const datos = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = datos.detail; // FastAPI: texto, o lista de errores de validación (422)
@@ -33,10 +33,7 @@ async function http(metodo, ruta, cuerpo) {
 }
 
 const apiReal = {
-  
   login: (email, password) => http("POST", "/auth/login", { email, password }),
-  enviarMensajeAsistente: (mensaje, historial = []) =>
-  http("POST", "/asistente/mensaje", { mensaje, historial }),
   crearSolicitud: (d) => http("POST", "/solicitudes", d),
   misSolicitudes: () => http("GET", "/solicitudes/mias"),
   getSolicitud: (id) => http("GET", `/solicitudes/${id}`),
@@ -53,6 +50,10 @@ const apiReal = {
   getUsuarios: () => http("GET", "/admin/usuarios"),
   setPiloto: (id, es_piloto) => http("PATCH", `/admin/usuarios/${id}/piloto`, { es_piloto }),
   puntosUsuario: () => http("GET", "/solicitudes/puntos"),
+  preguntarAsistente: (mensaje, historial) => http("POST", "/asistente", { mensaje, historial }),
+  registro: (d) => http("POST", "/auth/registro", d),
+  yo: () => http("GET", "/auth/yo"),
+  contenidos: (categoria) => http("GET", "/contenidos" + (categoria ? `?categoria=${categoria}` : "")),
 };
 
 /* ========================= Modo simulado (localStorage) ========================= */
@@ -119,9 +120,32 @@ function calcularPuntos(db, tipo_residuo, cantidad, unidad) {
 const apiMock = {
   async login(email, password) {
     const db = leerDB();
-    const u = db.usuarios.find((x) => x.email === email.trim().toLowerCase());
-    if (!u || password !== "demo123") throw new Error("Correo o contraseña incorrectos");
+    const ident = email.trim().toLowerCase();
+    const u = db.usuarios.find((x) => x.email === ident || (x.telefono && x.telefono === ident));
+    if (!u || (u.clave || "demo123") !== password) throw new Error("Celular o contraseña incorrectos");
     return espera({ token: "mock-" + u.id, usuario: u });
+  },
+
+  async registro({ nombre, celular, password, tipo }) {
+    const db = leerDB();
+    if (db.usuarios.some((x) => x.telefono === celular)) throw new Error("Ese celular ya tiene una cuenta. Ingresa con tu celular y tu contraseña.");
+    const u = { id: Math.max(...db.usuarios.map((x) => x.id)) + 1, nombre, email: celular + "@celular.ecoconecta", rol: "solicitante",
+                tipo, es_piloto: false, telefono: celular, clave: password };
+    db.usuarios.push(u); guardarDB(db);
+    return espera({ token: "mock-" + u.id, usuario: u });
+  },
+  async yo() { const db = leerDB(); return espera(db.usuarios.find((x) => x.id === yo().id)); },
+
+  async contenidos(categoria) {
+    const todos = [
+      { id: 1, categoria: "separacion", titulo: "Cómo separar tus residuos en casa", resumen: "Tres grupos sencillos: orgánicos, reciclables y el resto.",
+        cuerpo: "Orgánicos: restos de comida, cáscaras, borra de café, hojas y poda.\nReciclables: plástico, cartón, papel, vidrio y metal, limpios y secos.\nEl resto: lo que no se puede aprovechar." },
+      { id: 2, categoria: "organicos", titulo: "Residuos orgánicos y la huerta comunitaria", resumen: "Lo que sobra de tu cocina puede volver como abono.",
+        cuerpo: "Los huerteros recogen los residuos orgánicos y los convierten en compost para la huerta comunitaria." },
+      { id: 3, categoria: "reciclables", titulo: "Prepara tus reciclables", resumen: "Limpios, secos y separados valen más.",
+        cuerpo: "Enjuaga los envases, déjalos secar y aplástalos.\nNo los mezcles con residuos orgánicos." },
+    ];
+    return espera(categoria ? todos.filter((c) => c.categoria === categoria) : todos);
   },
 
   async crearSolicitud(d) {
@@ -227,6 +251,16 @@ const apiMock = {
     db.puntos.push({ usuario_id: s.usuario_id, solicitud_id: s.id, puntos: s.puntos.total, explicacion: s.puntos.explicacion, fecha: ahora() });
     guardarDB(db);
     return espera(s);
+  },
+
+  // --- Asistente (simulado por palabras clave; el real usa Claude API en el backend)
+  async preguntarAsistente(mensaje) {
+    const t = mensaje.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const org = ["cascara", "fruta", "verdura", "comida", "resto", "cafe", "borra", "huevo", "poda", "hoja", "sobras"].some((p) => t.includes(p));
+    const rec = ["botella", "plastico", "carton", "papel", "vidrio", "lata", "metal", "envase", "periodico", "aluminio"].some((p) => t.includes(p));
+    if (org && !rec) return espera({ respuesta: "Eso es un residuo orgánico. Lo recoge un huertero para hacer abono en la huerta comunitaria.", flujo_sugerido: "organico", origen: "respaldo" });
+    if (rec && !org) return espera({ respuesta: "Eso es reciclable. Déjalo limpio y seco. Lo recoge un reciclador de oficio.", flujo_sugerido: "reciclable", origen: "respaldo" });
+    return espera({ respuesta: "No estoy seguro. Dime el nombre del residuo, por ejemplo «cáscara de naranja» o «botella de plástico».", flujo_sugerido: null, origen: "respaldo" });
   },
 
   // --- Admin

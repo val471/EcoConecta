@@ -1,57 +1,57 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
-from backend.models import Asignacion, Recoleccion, Solicitud, Usuario
-from backend.schemas.solicitud import RecoleccionIn, SolicitudOut
-from backend.security.permisos import modo_para, requiere_recolector
-from backend.services import puntos as svc_puntos
-from backend.services import whatsapp_service
-from backend.services.flujo_estados import FlujoError, cambiar_estado
-from backend.services.serializadores import obtener_solicitud, serializar
+from ..constantes import TIPOS_RESIDUO
+from ..database import get_db
+from ..models import Asignacion, MovimientoPuntos, Recoleccion, ReglaPuntos, Solicitud, Usuario
+from ..schemas import RecoleccionIn
+from ..security.permisos import requiere_roles
+from ..services.flujo_estados import cambiar_estado
+from ..services.puntos import calcular_puntos
+from ..services.serializacion import solicitud_dict
+from ..services.whatsapp_service import notificar
 
-router = APIRouter(prefix="/api/recolector", tags=["recolector"])
-
-
-def _mia(db: Session, usuario: Usuario, solicitud_id: int) -> Solicitud:
-    s = obtener_solicitud(db, solicitud_id)
-    if modo_para(usuario, s) != "operativo":  # RN-07: solo lo que tiene asignado
-        raise HTTPException(404, "Solicitud no encontrada.")
-    return s
+router = APIRouter(prefix="/recolector", tags=["recolector"])
+solo_recolector = requiere_roles("recolector")
 
 
-@router.get("/solicitudes", response_model=list[SolicitudOut])
-def asignadas(estado: str | None = None, usuario: Usuario = Depends(requiere_recolector), db: Session = Depends(get_db)):
-    consulta = (select(Solicitud).join(Asignacion, Asignacion.solicitud_id == Solicitud.id)
-                .where(Asignacion.recolector_id == usuario.id).order_by(Solicitud.id.desc()))
-    if estado:
-        consulta = consulta.where(Solicitud.estado == estado)
-    return [serializar(s, "operativo") for s in db.scalars(consulta).all()]
+def _asignada_a(db: Session, codigo: str, u: Usuario):
+    return (db.query(Solicitud).join(Asignacion, Asignacion.solicitud_id == Solicitud.id)
+            .filter(Solicitud.codigo == codigo, Asignacion.recolector_id == u.id).first())
 
 
-@router.get("/solicitudes/{solicitud_id}", response_model=SolicitudOut)
-def detalle(solicitud_id: int, usuario: Usuario = Depends(requiere_recolector), db: Session = Depends(get_db)):
-    return serializar(_mia(db, usuario, solicitud_id), "operativo")
+@router.get("/asignaciones")
+def asignaciones(db: Session = Depends(get_db), u: Usuario = Depends(solo_recolector)):
+    """RN-07: el recolector solo ve (con contacto y dirección) lo que le asignaron."""
+    filas = (db.query(Solicitud).join(Asignacion, Asignacion.solicitud_id == Solicitud.id)
+             .filter(Asignacion.recolector_id == u.id, Solicitud.estado != "cancelada")
+             .order_by(Solicitud.id.desc()).all())
+    return [solicitud_dict(s, operativo=True) for s in filas]
 
 
-@router.post("/solicitudes/{solicitud_id}/recoleccion", response_model=SolicitudOut)
-def registrar_recoleccion(solicitud_id: int, datos: RecoleccionIn, usuario: Usuario = Depends(requiere_recolector),
-                          db: Session = Depends(get_db)):
-    """Registra la recolección, cierra la solicitud (recolectada) y entonces asigna puntos (RN-05)."""
-    s = _mia(db, usuario, solicitud_id)
-    if s.estado != "programada":
-        raise HTTPException(409, f"Solo se registra la recolección de una solicitud programada (estado actual: '{s.estado}').")
-    try:
-        s.recoleccion = Recoleccion(recolector_id=usuario.id, tipo_residuo=s.tipo_residuo, cantidad=datos.cantidad,
-                                    unidad=datos.unidad.strip().lower(), observaciones=datos.observaciones)
-        db.flush()
-        cambiar_estado(db, s, "recolectada", usuario, "Recolección registrada")
-        svc_puntos.otorgar(db, s)
-    except FlujoError as exc:
-        db.rollback()
-        raise HTTPException(409, str(exc)) from exc
-    whatsapp_service.notificar_recolectada(db, s)
+@router.post("/solicitudes/{codigo}/recoleccion")
+def registrar(codigo: str, datos: RecoleccionIn, db: Session = Depends(get_db), u: Usuario = Depends(solo_recolector)):
+    s = _asignada_a(db, codigo, u)
+    if not s:
+        raise HTTPException(404, "Solicitud no asignada a ti")
+    tipo = (datos.tipo_residuo or "").strip()
+    if tipo not in TIPOS_RESIDUO or TIPOS_RESIDUO[tipo]["flujo"] != s.flujo:
+        raise HTTPException(400, "Ese material no corresponde a este tipo de solicitud")
+    if datos.unidad != "kg":
+        raise HTTPException(400, "La unidad debe ser kg")
+    cantidad = Decimal(str(datos.cantidad)).quantize(Decimal("0.01"))
+    if not (Decimal("0") < cantidad <= Decimal("1000")):
+        raise HTTPException(400, "Indica una cantidad mayor a 0")
+
+    cambiar_estado(db, s, "recolectada", u.nombre, "Recolección registrada")           # RN-05: primero el cierre...
+    db.add(Recoleccion(solicitud_id=s.id, tipo_residuo=tipo, cantidad=cantidad, unidad="kg"))
+    regla = db.query(ReglaPuntos).filter(ReglaPuntos.tipo_residuo == tipo, ReglaPuntos.unidad == "kg").first()
+    total, explicacion = calcular_puntos(regla.puntos_por_unidad if regla else None, tipo, cantidad, "kg")
+    db.add(MovimientoPuntos(usuario_id=s.usuario_id, solicitud_id=s.id, puntos=total, explicacion=explicacion))  # ...luego los puntos
     db.commit()
     db.refresh(s)
-    return serializar(s, "operativo")
+    notificar(db, s, f"Registramos la entrega de tu solicitud {s.codigo}. Ganaste {total} puntos. ¡Gracias por participar!")
+    db.refresh(s)
+    return solicitud_dict(s, operativo=True)

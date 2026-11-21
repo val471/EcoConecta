@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crear cuenta · EcoConecta</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar"></div>
+  <main class="contenedor" style="max-width:520px">
+    <h1>Crear mi cuenta</h1>
+    <p class="texto-suave">Solo te pedimos lo necesario. Con tu celular y tu contraseña podrás ingresar.</p>
+    <div id="alertas" aria-live="polite"></div>
+
+    <form id="form-registro" class="eco-card" novalidate>
+      <label class="form-label" for="nombre">Tu nombre</label>
+      <input id="nombre" class="form-control" autocomplete="name" placeholder="Ej.: María Pérez" required>
+      <div class="text-danger fw-semibold mt-1" id="error-nombre" hidden></div>
+
+      <label class="form-label mt-3" for="celular">Número de celular</label>
+      <input id="celular" class="form-control" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="Ej.: 3001234567" required>
+      <div class="ayuda mt-1">Con este número ingresarás a la plataforma.</div>
+      <div class="text-danger fw-semibold mt-1" id="error-celular" hidden></div>
+
+      <label class="form-label mt-3" for="tipo">Tipo de lugar</label>
+      <select id="tipo" class="form-select"></select>
+
+      <label class="form-label mt-3" for="password">Contraseña</label>
+      <input id="password" class="form-control" type="password" autocomplete="new-password" required>
+      <div class="ayuda mt-1">Mínimo 6 caracteres.</div>
+      <div class="form-check mt-2 fs-6">
+        <input class="form-check-input" type="checkbox" id="ver">
+        <label class="form-check-label" for="ver">Mostrar la contraseña</label>
+      </div>
+      <div class="text-danger fw-semibold mt-1" id="error-password" hidden></div>
+
+      <div class="aviso-puntos mt-3"><i class="bi bi-info-circle" aria-hidden="true"></i>
+        Para pedir recolecciones, el administrador del piloto debe habilitar tu cuenta. Te avisaremos cuando esté lista.</div>
+
+      <button id="btn-registro" type="submit" class="btn btn-eco accion-grande mt-3"><i class="bi bi-person-plus" aria-hidden="true"></i> Crear mi cuenta</button>
+    </form>
+    <p class="mt-3">¿Ya tienes cuenta? <a href="login.html">Ingresar</a></p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/navbar.js"></script>
+  <script src="js/registro.js"></script>
+</body>
+</html>
