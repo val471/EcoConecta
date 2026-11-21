@@ -65,6 +65,7 @@ function dbInicial() {
       { id: 6, nombre: "Huertera María", email: "huertera@demo.co", rol: "recolector", flujo: "organico" },
       { id: 7, nombre: "Reciclador Jorge", email: "reciclador@demo.co", rol: "recolector", flujo: "reciclable" },
       { id: 8, nombre: "Administrador", email: "admin@demo.co", rol: "admin" },
+      { id: 9, nombre: "Vecina sin habilitar", email: "vecina@demo.co", rol: "solicitante", tipo: "hogar", es_piloto: false, telefono: "3000000009" },
     ],
     reglas: [
       { tipo_residuo: "organico", unidad: "kg", puntos_por_unidad: 5 },
@@ -106,7 +107,7 @@ function calcularPuntos(db, tipo_residuo, cantidad, unidad) {
   const regla = db.reglas.find((r) => r.tipo_residuo === tipo_residuo && r.unidad === unidad);
   if (!regla) return { total: 0, explicacion: "Sin regla de puntos para este material; no se asignan puntos." };
   const total = Math.round(cantidad * regla.puntos_por_unidad);
-  return { total, explicacion: `${cantidad} ${unidad} de ${tipo_residuo} × ${regla.puntos_por_unidad} puntos/${unidad} = ${total} puntos` };
+  return { total, explicacion: `${cantidad} ${unidad} de ${etiquetaResiduo(tipo_residuo).toLowerCase()} × ${regla.puntos_por_unidad} puntos/${unidad} = ${total} puntos` };
 }
 
 const apiMock = {
@@ -119,6 +120,9 @@ const apiMock = {
 
   async crearSolicitud(d) {
     const db = leerDB(); const u = yo();
+    // RN-08: solo usuarios piloto habilitados pueden solicitar
+    if (!db.usuarios.find((x) => x.id === u.id)?.es_piloto)
+      throw new Error("Tu cuenta todavía no está habilitada para solicitar recolecciones. Habla con el administrador.");
     if (!d.flujo || !["organico", "reciclable"].includes(d.flujo)) throw new Error("Elige el tipo de residuo");
     db.seq += 1;
     const sol = {

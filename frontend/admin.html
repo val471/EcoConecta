@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administrar · EcoConecta</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar"></div>
+  <main class="contenedor">
+    <h1>Administrar</h1>
+    <div id="alertas" aria-live="polite"></div>
+
+    <section class="eco-card mt-3" aria-labelledby="h-puntos">
+      <h2 id="h-puntos"><i class="bi bi-star" aria-hidden="true"></i> Puntos por material</h2>
+      <p class="texto-suave">Define cuántos puntos gana el usuario por cada kilo entregado. Se aplican cuando el recolector registra la recolección.</p>
+      <div class="aviso-puntos mb-3" id="aviso-puntos"></div>
+      <div class="tabla-scroll">
+        <table class="table align-middle">
+          <thead><tr><th scope="col">Material</th><th scope="col">Puntos por kg</th><th scope="col">Ejemplo con 2 kg</th></tr></thead>
+          <tbody id="tabla-reglas"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-eco" id="btn-guardar-reglas"><i class="bi bi-save" aria-hidden="true"></i> Guardar puntos</button>
+    </section>
+
+    <section class="eco-card mt-4" aria-labelledby="h-pilotos">
+      <h2 id="h-pilotos"><i class="bi bi-people" aria-hidden="true"></i> Quién puede solicitar</h2>
+      <p class="texto-suave">Solo las personas habilitadas pueden pedir recolecciones durante el piloto.</p>
+      <div id="resumen-pilotos" class="fw-semibold mb-2"></div>
+      <ul class="list-group" id="lista-usuarios"></ul>
+    </section>
+
+    <section class="eco-card mt-4" aria-labelledby="h-equipo">
+      <h2 id="h-equipo"><i class="bi bi-person-badge" aria-hidden="true"></i> Equipo que atiende</h2>
+      <ul class="list-unstyled mb-0" id="lista-equipo"></ul>
+    </section>
+
+    <p class="mt-4"><a href="educacion.html"><i class="bi bi-book" aria-hidden="true"></i> Ver contenidos de educación ambiental</a></p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/navbar.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

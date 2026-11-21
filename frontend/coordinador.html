@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitudes · EcoConecta</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar"></div>
+
+  <main class="contenedor">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+      <div>
+        <h1 class="mb-1">Solicitudes</h1>
+        <div id="subtitulo" class="texto-suave"></div>
+      </div>
+      <div style="min-width:220px">
+        <label class="form-label mb-1" for="periodo">Periodo</label>
+        <select id="periodo" class="form-select">
+          <option value="todo">Todo el tiempo</option>
+          <option value="hoy">Hoy</option>
+          <option value="semana">Últimos 7 días</option>
+          <option value="mes">Este mes</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="alertas" class="mt-3" aria-live="polite"></div>
+
+    <div class="d-flex flex-wrap gap-2 mt-3" id="filtros" role="group" aria-label="Filtrar solicitudes"></div>
+    <div class="ayuda mt-2" id="ayuda-filtro"></div>
+
+    <div id="lista" class="d-grid gap-3 mt-3" aria-busy="true">
+      <div class="texto-suave">Cargando solicitudes…</div>
+    </div>
+  </main>
+
+  <!-- Modal: asignar recolector -->
+  <div class="modal fade" id="modal-asignar" tabindex="-1" aria-labelledby="t-asignar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title h4" id="t-asignar">Asignar recolector</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+      <div class="modal-body">
+        <div id="alerta-asignar"></div>
+        <p id="resumen-asignar" class="mb-3"></p>
+        <label class="form-label" for="sel-recolector" id="lbl-recolector">Persona que hará la recolección</label>
+        <select id="sel-recolector" class="form-select"></select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-eco" data-bs-dismiss="modal">Volver</button>
+        <button class="btn btn-eco" id="btn-asignar" disabled><i class="bi bi-person-check" aria-hidden="true"></i> Asignar</button>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- Modal: programar día, hora y persona (RN-02) -->
+  <div class="modal fade" id="modal-programar" tabindex="-1" aria-labelledby="t-programar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title h4" id="t-programar">Programar recolección</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+      <div class="modal-body">
+        <div id="alerta-programar"></div>
+        <p id="resumen-programar" class="mb-3"></p>
+        <label class="form-label" for="fecha">Día</label>
+        <input type="date" id="fecha" class="form-control">
+        <label class="form-label mt-3" for="hora">Hora</label>
+        <select id="hora" class="form-select"></select>
+        <label class="form-label mt-3" for="persona">Persona encargada</label>
+        <input id="persona" class="form-control" readonly>
+        <div class="ayuda mt-2" id="ayuda-programar">Primero acuerda el día y la hora con quien hizo la solicitud. No se programa hasta completar día, hora y persona.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-eco" data-bs-dismiss="modal">Programar después</button>
+        <button class="btn btn-eco" id="btn-programar" disabled><i class="bi bi-calendar-check" aria-hidden="true"></i> Guardar programación</button>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- Modal: cancelar -->
+  <div class="modal fade" id="modal-cancelar" tabindex="-1" aria-labelledby="t-cancelar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title h4" id="t-cancelar">¿Cancelar esta solicitud?</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+      <div class="modal-body">
+        <div id="alerta-cancelar"></div>
+        <p id="resumen-cancelar" class="mb-3"></p>
+        <label class="form-label" for="motivo">Motivo</label>
+        <select id="motivo" class="form-select">
+          <option>La persona pidió cancelar</option>
+          <option>No se pudo contactar</option>
+          <option>La dirección está fuera de la ruta</option>
+          <option>Otro motivo</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-eco" data-bs-dismiss="modal">No, volver</button>
+        <button class="btn btn-danger" id="btn-cancelar"><i class="bi bi-x-circle" aria-hidden="true"></i> Sí, cancelar solicitud</button>
+      </div>
+    </div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/navbar.js"></script>
+  <script src="js/coordinador.js"></script>
+</body>
+</html>
